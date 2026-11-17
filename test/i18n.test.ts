@@ -8,6 +8,7 @@ function assert(c: unknown, m: string): asserts c {
 // Default language should be Polish
 setLang('pl');
 assert(getLang() === 'pl', 'Default language must be Polish (pl)');
+assert(t().nav.bench === 'Warsztat', 't() helper resolves nav.bench in Polish');
 
 // Dictionary validation
 const pl = DICT_PL;
