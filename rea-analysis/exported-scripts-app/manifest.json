@@ -1,0 +1,75 @@
+{
+  "capture_path": "/Users/merx/rea/breadboard/capture-app.json",
+  "capture_sha256": "0846e33f6328c23a63d590d4ef6f33eb072b0968d073fd5dd604cd85603735d9",
+  "capture_kind": "browser-scenario",
+  "source_evidence_id": "ev_f6e3febf66dec7d44f4978bf1079dee8153ec6bfc49cb5c8ab4da2753aa61cd0",
+  "capture_completeness": {
+    "status": "complete",
+    "equality_eligible": true,
+    "missing_sections": [],
+    "truncated_sections": []
+  },
+  "output_directory": "/Users/merx/rea/breadboard/exported-scripts-app",
+  "analysis_input": {
+    "input_path": "/Users/merx/rea/breadboard/exported-scripts-app/files",
+    "format": "directory"
+  },
+  "scripts": [
+    {
+      "source": {
+        "kind": "scenario-response",
+        "transaction_id": "request-2",
+        "request_sequence": 4,
+        "response_sequence": 22,
+        "status": 200
+      },
+      "url": "https://tholtman1-del.github.io/deadboard/assets/app-CmRfO5qf.js",
+      "content": {
+        "state": "exported",
+        "relative_path": "origins/98a75d67e4d36d63799276dbe9d848610d83ff8ef7e9ff2651e91e9d4188063b/deadboard/assets/app-CmRfO5qf.js",
+        "layout": "url-path",
+        "layout_reason": null,
+        "sha256": "962fa25f73677f5c6fecb4b13b9bfe6422ce29b4679af2adbceb39c487740ac7",
+        "bytes": 419263,
+        "media_type": "application/javascript; charset=utf-8",
+        "redacted": false,
+        "representation": "playwright-response-body-bytes"
+      }
+    },
+    {
+      "source": {
+        "kind": "scenario-response",
+        "transaction_id": "request-3",
+        "request_sequence": 5,
+        "response_sequence": 13,
+        "status": 200
+      },
+      "url": "https://tholtman1-del.github.io/deadboard/assets/logo-BWg8WFbs.js",
+      "content": {
+        "state": "exported",
+        "relative_path": "origins/98a75d67e4d36d63799276dbe9d848610d83ff8ef7e9ff2651e91e9d4188063b/deadboard/assets/logo-BWg8WFbs.js",
+        "layout": "url-path",
+        "layout_reason": null,
+        "sha256": "a64f112155f9a4e0ebd44dc0a52e93de70d38db1d4da09c2033b44eba705d377",
+        "bytes": 5817,
+        "media_type": "application/javascript; charset=utf-8",
+        "redacted": false,
+        "representation": "playwright-response-body-bytes"
+      }
+    }
+  ],
+  "limitations": [
+    "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+    "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+    "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+    "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+    "Captured response-body bytes are the result of Playwright's Response.body() API. Playwright may satisfy that API with a credentialed follow-up load of the request URL when CDP has no body, so transaction and event links do not verify that retained bytes came from the original network transaction.",
+    "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+    "Storage values are hashed only after declared-secret redaction.",
+    "Only script bytes retained in this capture are exported. Sources are not refetched or executed, and a response or Debugger source does not prove execution.",
+    "Ordinary unambiguous URL paths preserve relative module layouts by origin, including case-distinct spellings. Query variants, exact path collisions, file/directory prefixes, inline sources, and unrepresentable paths are isolated. A case-distinct pair is isolated only when the destination filesystem cannot store both spellings; the record names that pair. Browser module relationships of isolated paths remain unknown.",
+    "Local JavaScript analysis does not implement browser import maps, root-relative URL resolution, remote URL loading, or browser runtime behavior. It may strip import queries and fragments; isolated variants are not canonical targets.",
+    "Source-map declarations are retained as metadata. No source maps or missing dependencies are fetched or reconstructed.",
+    "Scenario response bytes preserve the output of Playwright's Response.body() API; any source-body provenance caveat from the capture is retained in this manifest. Debugger sources are the exposed text encoded as UTF-8. Redacted bytes are exported exactly as retained, and may no longer parse as JavaScript."
+  ]
+}

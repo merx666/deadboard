@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.vite/
+# local build settings (e.g. VITE_FEEDBACK_TO)
+.env.local
+.env.*.local
+
+# Private regression fixtures (Apple boardview / schematic data): local tests only, never published
+board_schemas/
+test/private/
+
+# Large media is attached to GitHub releases instead of committed
+docs/media/*.mp4
+
+# Personal CV and grant application drafts (stay local only)
+docs/GRANT_APPLICATIONS.md
+docs/grants/
