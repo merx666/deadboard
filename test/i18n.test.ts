@@ -87,4 +87,23 @@ for (const preset of BOARD_PRESETS) {
   assert(sc.meta.title.length > 0, `Preset ${preset.id} must have title`);
 }
 
-console.log('i18n: Polish (default) and English translations, scenario lookups, tutorials, supplier catalog, and board presets — ok');
+// Custom board creation and scenario builder validation
+const { buildCustomScenario, getFootprint } = await import('../src/ui/boardCreator');
+const blankSc = buildCustomScenario({
+  presetId: 'custom-blank',
+  width: 90,
+  height: 50,
+  color: '#0b2b40',
+  placedComponents: [
+    { id: 'c1', partId: 'generic-header-5v', ref: 'J1', x: 10, y: 25, rotation: 0, value: 5.0, name: 'USB IN' },
+    { id: 'c2', partId: 'res-smd-0805-10k', ref: 'R1', x: 25, y: 25, rotation: 0, value: 1000, name: 'Resistor' },
+    { id: 'c3', partId: 'generic-led', ref: 'D1', x: 40, y: 25, rotation: 0, value: 0, name: 'LED' }
+  ],
+  fault: 'none',
+});
+assert(blankSc.board.w === 90 && blankSc.board.h === 50, 'Custom board dimensions match');
+assert(blankSc.board.components.length === 3, 'All placed components exist on custom board');
+assert(blankSc.board.traces.length > 0, 'Custom board copper traces routed');
+assert(getFootprint('res-smd-0805-10k', { id: 'c2', partId: 'res-smd-0805-10k', ref: 'R1', x: 25, y: 25, rotation: 0, name: 'R1' }).padsCount === 2, 'Footprint pads count valid');
+
+console.log('i18n: Polish (default) and English translations, scenario lookups, tutorials, supplier catalog, board presets, and board creator — ok');

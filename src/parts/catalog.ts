@@ -21,6 +21,7 @@ export interface ComponentPart {
   footprintWidth: number; // mm
   footprintHeight: number; // mm
   padsCount: number;
+  tags?: string[];
 }
 
 export const SUPPLIER_PARTS: ComponentPart[] = [
@@ -51,6 +52,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 18.0,
     footprintHeight: 25.5,
     padsCount: 38,
+    tags: ['mcu', 'wifi', 'bluetooth', 'ble', 'espressif', 'esp32', 'wroom', 'iot', 'soc', '3.3v', '3v3', 'xtensa', 'dual-core', 'smd', 'module', 'modul', 'mikrokontroler']
   },
   {
     id: 'esp32-s3-wroom-1',
@@ -71,6 +73,32 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 18.0,
     footprintHeight: 25.5,
     padsCount: 44,
+    tags: ['mcu', 'wifi', 'bluetooth', 'ble', 'ble5', 'espressif', 'esp32', 'esp32s3', 's3', 'iot', 'soc', '3.3v', '3v3', 'xtensa', 'ai', 'vector', 'usb', 'otg', 'smd', 'module', 'modul', 'mikrokontroler']
+  },
+  {
+    id: 'esp32-c3-wroom-02',
+    mpn: 'ESP32-C3-WROOM-02',
+    manufacturer: 'Espressif Systems',
+    lcsc: 'C2934571',
+    pcbwayPart: 'PCBWAY-ESP32-C3-WROOM-02',
+    namePl: 'Moduł mikrokontrolera ESP32-C3-WROOM-02 RISC-V Wi-Fi + BLE5',
+    nameEn: 'ESP32-C3-WROOM-02 RISC-V Wi-Fi + BLE5 MCU Module',
+    category: 'modules',
+    pkg: 'Module-18 (18x20mm)',
+    voltage: '3.0V – 3.6V (typ. 3.3V)',
+    current: 'Standby: 5 µA, Aktywny TX: 290 mA',
+    descPl: 'Jednordzeniowy 32-bitowy procesor RISC-V RV32IMC @ 160MHz, 400KB SRAM, 4MB Flash, Wi-Fi 4 (802.11 b/g/n) i Bluetooth 5 (LE) / Mesh. Nowoczesny, energooszczędny następca ESP8266.',
+    descEn: 'Single-core 32-bit RISC-V RV32IMC @ 160MHz, 400KB SRAM, 4MB Flash, Wi-Fi 4 and Bluetooth 5 (LE). Modern low-cost ESP8266 successor.',
+    pins: {
+      '1': 'GND', '2': '3V3', '3': 'EN (CHIP_EN)', '4': 'IO4', '5': 'IO5', '6': 'IO6',
+      '7': 'IO7', '8': 'IO8', '9': 'IO9 (BOOT)', '10': 'IO10', '11': 'GND', '12': 'IO18',
+      '13': 'IO19', '14': 'IO20 (U0RXD)', '15': 'IO21 (U0TXD)', '16': 'GND', '17': 'GND', '18': 'GND'
+    },
+    valKind: 'IC',
+    footprintWidth: 18.0,
+    footprintHeight: 20.0,
+    padsCount: 18,
+    tags: ['mcu', 'riscv', 'risc-v', 'wifi', 'bluetooth', 'ble', 'ble5', 'espressif', 'esp32', 'esp32c3', 'c3', 'iot', 'soc', '3.3v', '3v3', 'smd', 'module', 'modul', 'mikrokontroler']
   },
   {
     id: 'rp2040-pico',
@@ -94,6 +122,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 21.0,
     footprintHeight: 51.0,
     padsCount: 40,
+    tags: ['mcu', 'arm', 'cortex-m0', 'raspberry', 'rpi', 'pico', 'rp2040', 'dual-core', 'pio', '3.3v', '3v3', '5v', 'dip', 'dip-40', 'tht', 'castellated', 'module', 'modul', 'mikrokontroler', 'plytka']
   },
   {
     id: 'rpi-zero-2w',
@@ -114,6 +143,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 30.0,
     footprintHeight: 65.0,
     padsCount: 40,
+    tags: ['soc', 'arm', 'cortex-a53', 'raspberry', 'rpi', 'zero2w', 'linux', 'wifi', 'bluetooth', 'quad-core', 'module', 'modul', 'plytka', 'board', '5v', '3.3v']
   },
   {
     id: 'rpi-5-b5-pmic',
@@ -134,6 +164,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 28.0,
     footprintHeight: 28.0,
     padsCount: 68,
+    tags: ['pmic', 'power', 'regulator', 'buck', 'ldo', 'dialog', 'da9091', 'raspberry', 'rpi5', 'qfn', 'qfn-68', 'smd', 'przetwornica', 'zasilanie', '5v', '3.3v']
   },
   {
     id: 'atmega328p-arduino',
@@ -158,6 +189,34 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 9.0,
     footprintHeight: 9.0,
     padsCount: 32,
+    tags: ['mcu', 'avr', 'arduino', 'uno', 'nano', 'atmega328p', 'atmega328', 'microchip', 'atmel', '5v', '5.0v', 'tqfp', 'tqfp-32', 'smd', 'mikrokontroler', 'ic']
+  },
+  {
+    id: 'atmega328p-pu',
+    mpn: 'ATMEGA328P-PU (Arduino Uno DIP-28)',
+    manufacturer: 'Microchip Technology',
+    lcsc: 'C14877',
+    pcbwayPart: 'PCBWAY-ATMEGA328P-PU',
+    namePl: 'Mikrokontroler ATmega328P-PU 8-bit AVR 20MHz DIP-28 (Arduino Uno)',
+    nameEn: 'ATmega328P-PU 8-bit AVR 20MHz DIP-28 MCU (Arduino Uno)',
+    category: 'modules',
+    pkg: 'DIP-28 (Through-Hole)',
+    voltage: '1.8V – 5.5V (typ. 5.0V)',
+    current: 'Aktywny: 5.2 mA @ 16MHz 5V',
+    descPl: 'Klasyczna przewlekana wersja DIP-28 mikrokontrolera ATmega328P, serce oryginalnego Arduino Uno R3. 32KB pamięci Flash, 2KB SRAM, 1KB EEPROM, wymienny w podstawce.',
+    descEn: 'Through-hole DIP-28 version of ATmega328P MCU, heart of original Arduino Uno R3 socket. 32KB Flash, 2KB SRAM, 1KB EEPROM, 23 GPIOs.',
+    pins: {
+      '1': 'PC6 (RESET)', '2': 'PD0 (RXD)', '3': 'PD1 (TXD)', '4': 'PD2', '5': 'PD3', '6': 'PD4',
+      '7': 'VCC', '8': 'GND', '9': 'PB6 (XTAL1)', '10': 'PB7 (XTAL2)', '11': 'PD5', '12': 'PD6',
+      '13': 'PD7', '14': 'PB0', '15': 'PB1', '16': 'PB2', '17': 'PB3', '18': 'PB4',
+      '19': 'PB5 (SCK)', '20': 'AVCC', '21': 'AREF', '22': 'GND', '23': 'PC0', '24': 'PC1',
+      '25': 'PC2', '26': 'PC3', '27': 'PC4 (SDA)', '28': 'PC5 (SCL)'
+    },
+    valKind: 'IC',
+    footprintWidth: 10.16,
+    footprintHeight: 35.56,
+    padsCount: 28,
+    tags: ['mcu', 'avr', 'arduino', 'uno', 'atmega328p', 'atmega328', 'microchip', 'atmel', '5v', '5.0v', 'dip', 'dip-28', 'tht', 'through-hole', 'mikrokontroler', 'ic']
   },
   {
     id: 'stm32f103c8t6-bluepill',
@@ -165,19 +224,20 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     manufacturer: 'STMicroelectronics',
     lcsc: 'C8734',
     pcbwayPart: 'PCBWAY-STM32F103C8T6',
-    namePl: 'Mikrokontroler STM32F103C8T6 ARM Cortex-M3 72MHz',
-    nameEn: 'STM32F103C8T6 ARM Cortex-M3 72MHz Microcontroller',
+    namePl: 'Mikrokontroler STM32F103C8T6 ARM Cortex-M3 72MHz (Blue Pill)',
+    nameEn: 'STM32F103C8T6 ARM Cortex-M3 72MHz Microcontroller (Blue Pill)',
     category: 'modules',
     pkg: 'LQFP-48 (7x7mm)',
     voltage: '2.0V – 3.6V (typ. 3.3V)',
     current: '36 mA @ 72MHz',
-    descPl: 'Popularny mikrokontroler 32-bitowy z rdzeniem ARM Cortex-M3 72MHz, 64KB Flash, 20KB SRAM, USB 2.0 Full Speed, 2x SPI, 2x I2C, 3x USART i dwoma 12-bitowymi ADC.',
+    descPl: 'Popularny mikrokontroler 32-bitowy z rdzeniem ARM Cortex-M3 72MHz, 64KB Flash, 20KB SRAM, USB 2.0 Full Speed, 2x SPI, 2x I2C, 3x USART i dwoma 12-bitowymi ADC. Standard modułów "Blue Pill".',
     descEn: '32-bit ARM Cortex-M3 72MHz MCU with 64KB Flash, 20KB SRAM, native USB, standard for "Blue Pill" modules.',
     pins: { '1': 'VBAT', '7': 'NRST', '8': 'VSSA', '9': 'VDDA', '23': 'VSS', '24': 'VDD', '35': 'VSS', '36': 'VDD', '47': 'VSS', '48': 'VDD' },
     valKind: 'IC',
     footprintWidth: 9.0,
     footprintHeight: 9.0,
     padsCount: 48,
+    tags: ['mcu', 'arm', 'cortex-m3', 'stm32', 'stm32f103', 'bluepill', 'blue pill', 'stmicroelectronics', '3.3v', '3v3', 'lqfp', 'lqfp-48', 'smd', 'mikrokontroler', 'ic']
   },
 
   // --- Power Management & Regulators ---
@@ -201,6 +261,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 6.5,
     footprintHeight: 7.0,
     padsCount: 4,
+    tags: ['ldo', 'power', 'regulator', 'voltage', 'linear', '3.3v', '3v3', 'ams1117', 'sot-223', 'sot223', 'smd', 'stabilizator', 'przetwornica', 'zasilanie']
   },
   {
     id: 'ams1117-50',
@@ -222,6 +283,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 6.5,
     footprintHeight: 7.0,
     padsCount: 4,
+    tags: ['ldo', 'power', 'regulator', 'voltage', 'linear', '5v', '5.0v', 'ams1117', 'sot-223', 'sot223', 'smd', 'stabilizator', 'przetwornica', 'zasilanie']
   },
   {
     id: 'me6211c33m5g',
@@ -243,6 +305,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 3.0,
     padsCount: 5,
+    tags: ['ldo', 'power', 'regulator', 'voltage', 'linear', 'low-noise', '3.3v', '3v3', 'microne', 'sot-23-5', 'sot23', 'smd', 'stabilizator', 'przetwornica', 'zasilanie']
   },
   {
     id: 'tps54302ddcr',
@@ -263,6 +326,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 3.0,
     padsCount: 6,
+    tags: ['buck', 'step-down', 'stepdown', 'dcdc', 'dc-dc', 'power', 'regulator', 'switching', 'ti', 'texas instruments', 'sot-23-6', 'sot23', 'smd', 'przetwornica', 'zasilanie']
   },
   {
     id: 'sy8208bqnc',
@@ -283,6 +347,28 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 3.0,
     padsCount: 10,
+    tags: ['buck', 'step-down', 'stepdown', 'dcdc', 'dc-dc', 'power', 'regulator', 'switching', 'silergy', 'laptop', 'qfn', 'qfn-10', 'smd', 'przetwornica', 'zasilanie', '3.3v', '5v']
+  },
+  {
+    id: 'tp4056',
+    mpn: 'TP4056',
+    manufacturer: 'NanJing Top Power ASIC Corp',
+    lcsc: 'C16581',
+    pcbwayPart: 'PCBWAY-TP4056',
+    namePl: 'Kontroler ładowania akumulatorów Li-Ion 1A SOP-8-EP (CC/CV)',
+    nameEn: 'TP4056 1A Standalone Linear Li-Ion Battery Charger SOP-8-EP (CC/CV)',
+    category: 'power',
+    pkg: 'SOP-8-EP (z padem termicznym)',
+    voltage: 'Vin: 4.5V – 5.5V, Vbat: 4.2V ±1%',
+    current: 'Prąd ładowania do 1000 mA (programowalny rezystorem RPROG)',
+    descPl: 'Kompletna liniowa ładowarka CC/CV jednoogniwowych akumulatorów litowo-jonowych i litowo-polimerowych 3.7V/4.2V. Posiada piny sygnalizacyjne LED (CHRG, STDBY) oraz zabezpieczenie termiczne. LCSC C16581.',
+    descEn: 'Complete constant-current/constant-voltage (CC/CV) linear charger for single cell lithium-ion 3.7V/4.2V batteries with thermal regulation, programmable charge current up to 1A. LCSC C16581.',
+    pins: { '1': 'TEMP', '2': 'PROG', '3': 'GND', '4': 'VCC', '5': 'BAT', '6': 'STDBY', '7': 'CHRG', '8': 'CE', 'EP': 'GND' },
+    valKind: 'IC',
+    footprintWidth: 4.9,
+    footprintHeight: 3.9,
+    padsCount: 9,
+    tags: ['charger', 'battery', 'li-ion', 'lipo', 'li-po', '4056', 'tp4056', 'ladowarka', 'ładowarka', 'ladowanie', 'ładowanie', 'akumulator', 'bateria', 'power', 'zasilanie', 'sop-8', 'smd', 'cc-cv', 'ic']
   },
 
   // --- Transistors & MOSFETs ---
@@ -305,6 +391,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 2.5,
     padsCount: 3,
+    tags: ['mosfet', 'transistor', 'n-channel', 'n-mosfet', 'power', 'switch', 'alpha & omega', 'sot-23', 'sot23', 'smd', 'tranzystor']
   },
   {
     id: 'ao3401a',
@@ -325,6 +412,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 2.5,
     padsCount: 3,
+    tags: ['mosfet', 'transistor', 'p-channel', 'p-mosfet', 'power', 'switch', 'reverse-polarity', 'alpha & omega', 'sot-23', 'sot23', 'smd', 'tranzystor']
   },
   {
     id: 'bss138',
@@ -345,6 +433,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 2.5,
     padsCount: 3,
+    tags: ['mosfet', 'transistor', 'n-channel', 'n-mosfet', 'level-shifter', 'logic', 'onsemi', 'sot-23', 'sot23', 'smd', 'tranzystor', 'konwerter']
   },
 
   // --- Diodes & Protection ---
@@ -367,6 +456,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 5.0,
     footprintHeight: 2.8,
     padsCount: 2,
+    tags: ['diode', 'schottky', 'rectifier', 'power', 'sma', 'do-214ac', 'smd', 'dioda', 'prostownicza', '40v', '3a']
   },
   {
     id: 'usblc6-2sc6',
@@ -387,9 +477,10 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.0,
     footprintHeight: 3.0,
     padsCount: 6,
+    tags: ['diode', 'tvs', 'esd', 'protection', 'usb', 'stmicroelectronics', 'sot-23-6', 'sot23', 'smd', 'dioda', 'zabezpieczenie', 'ochrona']
   },
 
-  // --- Interface & Support ICs ---
+  // --- Interface & Support ICs / Connectors ---
   {
     id: 'ch340c',
     mpn: 'CH340C',
@@ -399,7 +490,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     namePl: 'Konwerter USB na UART z wbudowanym oscylatorem kwarcowym',
     nameEn: 'USB to Serial UART Bridge with Built-in Crystal',
     category: 'interface',
-    pkg: 'SOP-16 / SOP-8',
+    pkg: 'SOP-16',
     voltage: '3.3V – 5.0V',
     current: 'Typ. 12 mA',
     descPl: 'Ekonomiczny mostek USB-UART stosowany w programatorach ESP32, Arduino Nano i klonach STM32. Wbudowany rezonator eliminuje konieczność kwarcu 12MHz.',
@@ -409,6 +500,32 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 6.0,
     footprintHeight: 10.0,
     padsCount: 16,
+    tags: ['usb', 'uart', 'serial', 'bridge', 'converter', 'crystal', 'wch', 'ch340', 'ch340c', 'sop-16', 'smd', 'interface', 'interfejs', 'szeregowy']
+  },
+  {
+    id: 'ch340g',
+    mpn: 'CH340G',
+    manufacturer: 'WCH (Jiangsu Qinheng)',
+    lcsc: 'C84683',
+    pcbwayPart: 'PCBWAY-CH340G',
+    namePl: 'Konwerter USB na UART CH340G z zewnętrznym rezonatorem',
+    nameEn: 'USB to Serial UART Converter CH340G (External Crystal)',
+    category: 'interface',
+    pkg: 'SOP-16',
+    voltage: '3.3V – 5.0V',
+    current: 'Typ. 12 mA',
+    descPl: 'Powszechny konwerter USB-UART na płytkach Arduino Nano V3, NodeMCU v2 i klonach Uno. Wymaga zewnętrznego kwarcu 12MHz na pinach XI/XO (LCSC C84683).',
+    descEn: 'Ubiquitous USB to UART bridge used in Arduino Nano V3 and NodeMCU clones. Requires external 12MHz crystal on XI/XO pins (LCSC C84683).',
+    pins: {
+      '1': 'GND', '2': 'TXD', '3': 'RXD', '4': 'V3', '5': 'UD+', '6': 'UD-',
+      '7': 'XI', '8': 'XO', '9': 'CTS#', '10': 'DSR#', '11': 'RI#', '12': 'DCD#',
+      '13': 'DTR#', '14': 'RTS#', '16': 'VCC'
+    },
+    valKind: 'IC',
+    footprintWidth: 6.0,
+    footprintHeight: 10.0,
+    padsCount: 16,
+    tags: ['usb', 'uart', 'serial', 'bridge', 'converter', 'wch', 'ch340', 'ch340g', 'sop-16', 'smd', 'interface', 'interfejs', 'szeregowy']
   },
   {
     id: 'cp2102-gmr',
@@ -429,6 +546,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 5.0,
     footprintHeight: 5.0,
     padsCount: 28,
+    tags: ['usb', 'uart', 'serial', 'bridge', 'converter', 'silicon labs', 'cp2102', 'qfn', 'qfn-28', 'smd', 'interface', 'interfejs', 'szeregowy']
   },
   {
     id: 'lm358dr',
@@ -436,8 +554,8 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     manufacturer: 'Texas Instruments',
     lcsc: 'C6186',
     pcbwayPart: 'PCBWAY-LM358',
-    namePl: 'Podwójny wzmacniacz operacyjny ogólnego przeznaczenia',
-    nameEn: 'Dual General Purpose Operational Amplifier',
+    namePl: 'Podwójny wzmacniacz operacyjny ogólnego przeznaczenia (SOIC-8)',
+    nameEn: 'Dual General Purpose Operational Amplifier (SOIC-8)',
     category: 'interface',
     pkg: 'SOIC-8',
     voltage: 'Pojedyncze 3V – 32V lub symetryczne ±1.5V – ±16V',
@@ -449,6 +567,52 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 5.0,
     footprintHeight: 6.0,
     padsCount: 8,
+    tags: ['opamp', 'op-amp', 'amplifier', 'wzmacniacz', 'operacyjny', 'lm358', 'lm358dr', 'ti', 'texas instruments', 'soic-8', 'soic8', 'sop-8', 'smd', 'analog', 'comparator', 'ic']
+  },
+  {
+    id: 'lm358p',
+    mpn: 'LM358P',
+    manufacturer: 'Texas Instruments',
+    lcsc: 'C7442',
+    pcbwayPart: 'PCBWAY-LM358P',
+    namePl: 'Podwójny wzmacniacz operacyjny ogólnego przeznaczenia LM358P DIP-8',
+    nameEn: 'LM358P Dual General-Purpose Operational Amplifier DIP-8',
+    category: 'interface',
+    pkg: 'DIP-8',
+    voltage: '3.0V – 32V (pojedyncze) lub ±1.5V – ±16V (symetryczne)',
+    current: '0.7 mA prąd spoczynkowy, wyjście do 40 mA',
+    descPl: 'Powszechny podwójny wzmacniacz operacyjny w przewlekanej obudowie DIP-8. Szeroki zakres zasilania od 3V, idealny do płytek stykowych, komparatorów i układów audio. LCSC C7442.',
+    descEn: 'Industry standard dual op-amp in DIP-8 package. Operates from single 3V to 32V supply, ideal for breadboards, sensor amplification, and comparators. LCSC C7442.',
+    pins: { '1': 'OUT1', '2': 'IN1-', '3': 'IN1+', '4': 'GND / V-', '5': 'IN2+', '6': 'IN2-', '7': 'OUT2', '8': 'VCC / V+' },
+    valKind: 'IC',
+    footprintWidth: 9.5,
+    footprintHeight: 6.5,
+    padsCount: 8,
+    tags: ['opamp', 'op-amp', 'amplifier', 'wzmacniacz', 'operacyjny', 'lm358', 'lm358p', 'dip', 'dip-8', 'tht', 'through-hole', 'ti', 'texas instruments', 'analog', 'comparator', 'ic']
+  },
+  {
+    id: 'ne555p',
+    mpn: 'NE555P',
+    manufacturer: 'Texas Instruments',
+    lcsc: 'C7593',
+    pcbwayPart: 'PCBWAY-NE555P',
+    namePl: 'Precyzyjny generator czasowy NE555P DIP-8 (Timer 555)',
+    nameEn: 'NE555P Precision Timer DIP-8 (555 Timer IC)',
+    category: 'interface',
+    pkg: 'DIP-8',
+    voltage: '4.5V – 16V',
+    current: 'Spoczynkowy: 3 – 5 mA, Wyjście do 200 mA',
+    descPl: 'Kultowy precyzyjny układ czasowy 555 w obudowie przewlekanej DIP-8. Może generować impulsy zegarowe (układ astabilny), pojedyncze opóźnienia (monostabilny) lub sterować PWM. LCSC C7593.',
+    descEn: 'Legendary 555 timer IC in DIP-8 package. Operates in astable (oscillator/PWM), monostable (one-shot delay), and bistable modes with output drive up to 200mA. LCSC C7593.',
+    pins: {
+      '1': 'GND', '2': 'TRIG (Trigger)', '3': 'OUT', '4': 'RESET',
+      '5': 'CONT (Control)', '6': 'THRES (Threshold)', '7': 'DISCH (Discharge)', '8': 'VCC'
+    },
+    valKind: 'IC',
+    footprintWidth: 9.5,
+    footprintHeight: 6.5,
+    padsCount: 8,
+    tags: ['timer', 'ne555', 'ne555p', '555', 'astable', 'monostable', 'oscillator', 'clock', 'generator', 'dip', 'dip-8', 'tht', 'through-hole', 'ti', 'texas instruments', 'czasowy', 'zegar', 'ic']
   },
   {
     id: 'w25q128jvsiq',
@@ -469,6 +633,31 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 5.3,
     footprintHeight: 8.0,
     padsCount: 8,
+    tags: ['flash', 'spi', 'qspi', 'memory', 'pamiec', 'pamięć', 'winbond', '16mb', 'soic-8', 'soic8', 'sop-8', 'smd', 'ic', '3.3v']
+  },
+  {
+    id: 'usb-c-16p-tht-smd',
+    mpn: 'TYPE-C-31-M-12',
+    manufacturer: 'Korean Hroparts Elec',
+    lcsc: 'C165948',
+    pcbwayPart: 'PCBWAY-TYPE-C-16P',
+    namePl: 'Gniazdo żeńskie USB-C 16-pin SMD z 4 nóżkami THT (USB 2.0 / PD)',
+    nameEn: '16-Pin USB Type-C Receptacle SMD with 4 THT Shield Tabs (USB 2.0 / PD)',
+    category: 'interface',
+    pkg: 'USB-C-16P (SMD+THT)',
+    voltage: '20V DC max',
+    current: '3.0 A nominalny (do 5.0 A z rezystorami CC)',
+    descPl: 'Wysokiej wytrzymałości gniazdo USB Type-C 16-pin do zasilania oraz danych USB 2.0. 4 przewlekane bolce montażowe chronią przed wyrwaniem gniazda z laminatu. LCSC C165948.',
+    descEn: 'High-durability 16-pin USB Type-C female connector for power delivery and USB 2.0 data lines with 4 through-hole structural shield legs. LCSC C165948.',
+    pins: {
+      'A1/B12': 'GND', 'A4/B9': 'VBUS', 'A5': 'CC1', 'A6': 'D+', 'A7': 'D-', 'A8': 'SBU1',
+      'B1/A12': 'GND', 'B4/A9': 'VBUS', 'B5': 'CC2', 'B6': 'D+', 'B7': 'D-', 'B8': 'SBU2',
+      'SH1': 'SHIELD', 'SH2': 'SHIELD', 'SH3': 'SHIELD', 'SH4': 'SHIELD'
+    },
+    footprintWidth: 8.94,
+    footprintHeight: 7.35,
+    padsCount: 16,
+    tags: ['usb', 'usb-c', 'usbc', 'type-c', 'typec', 'connector', 'receptacle', 'gniazdo', 'zlacze', 'złącze', 'port', 'interface', 'power', 'vbus', 'smd', 'tht']
   },
 
   // --- Passives ---
@@ -492,6 +681,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 2.0,
     footprintHeight: 1.25,
     padsCount: 2,
+    tags: ['resistor', 'pull-up', 'passive', '0805', 'smd', 'rezystor', 'opornik', '10k', '10kohm', 'yageo']
   },
   {
     id: 'cap-mlcc-0805-100n',
@@ -513,6 +703,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 2.0,
     footprintHeight: 1.25,
     padsCount: 2,
+    tags: ['capacitor', 'mlcc', 'ceramic', 'decoupling', 'passive', '0805', 'smd', 'kondensator', 'pojemność', 'pojemnosc', '100n', '100nf', 'yageo']
   },
   {
     id: 'cap-mlcc-0805-10u',
@@ -534,6 +725,7 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 2.0,
     footprintHeight: 1.25,
     padsCount: 2,
+    tags: ['capacitor', 'mlcc', 'ceramic', 'filter', 'passive', '0805', 'smd', 'kondensator', 'pojemność', 'pojemnosc', '10u', '10uf', 'samsung']
   },
   {
     id: 'fuse-smd-1206-1a',
@@ -555,25 +747,391 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintWidth: 3.2,
     footprintHeight: 1.6,
     padsCount: 2,
+    tags: ['fuse', 'fast-acting', 'overcurrent', 'protection', 'passive', '1206', 'smd', 'bezpiecznik', 'ochrona', '1a', 'littelfuse']
   }
 ];
 
 export function findPartById(id: string): ComponentPart | undefined {
-  return SUPPLIER_PARTS.find((p) => p.id === id);
+  const normId = id.trim().toLowerCase();
+  return SUPPLIER_PARTS.find((p) => p.id.toLowerCase() === normId);
 }
 
-export function searchSupplierParts(query: string, category?: string): ComponentPart[] {
-  const q = query.toLowerCase().trim();
-  return SUPPLIER_PARTS.filter((p) => {
-    if (category && category !== 'all' && p.category !== category) return false;
-    if (!q) return true;
-    return (
-      p.mpn.toLowerCase().includes(q) ||
-      p.lcsc.toLowerCase().includes(q) ||
-      p.namePl.toLowerCase().includes(q) ||
-      p.nameEn.toLowerCase().includes(q) ||
-      p.descPl.toLowerCase().includes(q) ||
-      p.pkg.toLowerCase().includes(q)
-    );
+/** Strips Polish and international diacritics into plain ASCII (e.g. "pojemność" -> "pojemnosc", "płytka" -> "plytka"). */
+export function stripDiacritics(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l')
+    .replace(/Ł/g, 'L');
+}
+
+/** Normalizes a search term (trimmed, lowercase, diacritics stripped). */
+export function normalizeSearchTerm(term: string): string {
+  return stripDiacritics(term.trim().toLowerCase());
+}
+
+interface SynonymGroup {
+  stems: string[];
+  terms: string[];
+  valKinds?: Array<'R' | 'C' | 'L' | 'IC' | 'D' | 'Q' | 'SW' | 'F'>;
+  categories?: Array<'modules' | 'power' | 'transistors' | 'diodes' | 'interface' | 'passives'>;
+}
+
+const SYNONYM_GROUPS: SynonymGroup[] = [
+  {
+    stems: ['kondensator', 'pojemnos', 'capacitor', 'capacit', 'mlcc'],
+    terms: ['kondensator', 'pojemnosc', 'capacitor', 'mlcc', 'ceramic', 'decoupling'],
+    valKinds: ['C'],
+    categories: ['passives']
+  },
+  {
+    stems: ['rezystor', 'opornik', 'resistor', 'resist'],
+    terms: ['rezystor', 'opornik', 'resistor', 'pull-up'],
+    valKinds: ['R'],
+    categories: ['passives']
+  },
+  {
+    stems: ['przetwornic', 'stabilizator', 'regulator', 'ldo', 'buck', 'stepdown', 'dcdc'],
+    terms: ['przetwornica', 'stabilizator', 'regulator', 'ldo', 'buck', 'dcdc', 'step-down', 'linear', 'pmic', 'zasilanie'],
+    categories: ['power']
+  },
+  {
+    stems: ['tranzystor', 'transistor', 'mosfet', 'fet'],
+    terms: ['tranzystor', 'transistor', 'mosfet', 'fet', 'n-mosfet', 'p-mosfet', 'n-channel', 'p-channel'],
+    valKinds: ['Q'],
+    categories: ['transistors']
+  },
+  {
+    stems: ['diod', 'diode', 'schottky', 'tvs', 'esd'],
+    terms: ['dioda', 'diode', 'schottky', 'tvs', 'esd', 'rectifier', 'ochrona', 'zabezpieczenie'],
+    valKinds: ['D'],
+    categories: ['diodes']
+  },
+  {
+    stems: ['mikrokontroler', 'microcontroller', 'mcu', 'procesor', 'soc'],
+    terms: ['mikrokontroler', 'mcu', 'microcontroller', 'soc', 'procesor', 'arm', 'avr', 'xtensa', 'riscv'],
+    categories: ['modules']
+  },
+  {
+    stems: ['plytk', 'board', 'modul', 'module'],
+    terms: ['plytka', 'modul', 'module', 'board', 'pico', 'arduino'],
+    categories: ['modules']
+  },
+  {
+    stems: ['bezpiecznik', 'fuse'],
+    terms: ['bezpiecznik', 'fuse', 'fast-acting', 'overcurrent'],
+    valKinds: ['F'],
+    categories: ['passives']
+  },
+  {
+    stems: ['wzmacniacz', 'opamp', 'amplifier', 'operacyjn'],
+    terms: ['wzmacniacz', 'opamp', 'op-amp', 'amplifier', 'operacyjny', 'lm358', 'comparator'],
+    categories: ['interface']
+  },
+  {
+    stems: ['czasow', 'zegar', 'timer', '555', 'astabiln'],
+    terms: ['timer', 'czasowy', 'zegar', '555', 'ne555', 'astable', 'oscillator'],
+    categories: ['interface']
+  },
+  {
+    stems: ['ladowark', 'ladowan', 'charger', 'bater', 'battery', 'akumulator'],
+    terms: ['ladowarka', 'charger', 'battery', 'bateria', 'akumulator', 'li-ion', 'lipo', 'tp4056', 'cc-cv'],
+    categories: ['power']
+  },
+  {
+    stems: ['zlacz', 'gniazd', 'connector', 'receptacle'],
+    terms: ['zlacze', 'gniazdo', 'connector', 'receptacle', 'port', 'usb-c', 'usbc'],
+    categories: ['interface']
+  },
+  {
+    stems: ['pamiec', 'flash', 'memory'],
+    terms: ['pamiec', 'flash', 'memory', 'spi', 'qspi', 'winbond'],
+    categories: ['interface']
+  },
+  {
+    stems: ['uart', 'usart', 'szeregow', 'serial', 'ch340', 'cp2102'],
+    terms: ['uart', 'serial', 'szeregowy', 'ch340', 'cp2102', 'bridge', 'converter'],
+    categories: ['interface']
+  },
+  {
+    stems: ['wifi', 'bluetooth', 'ble', 'bezprzewodow'],
+    terms: ['wifi', 'bluetooth', 'ble', 'wireless', 'espressif'],
+    categories: ['modules']
+  }
+];
+
+/** Produces electrical/engineering notation variations (e.g. 3v3 <-> 3.3v, 100n <-> 100nf). */
+function getUnitEquivalents(token: string): string[] {
+  const res: string[] = [];
+  // 3v3 <-> 3.3v / 3.3
+  const vMatch1 = token.match(/^(\d+)v(\d+)$/i);
+  if (vMatch1) {
+    res.push(`${vMatch1[1]}.${vMatch1[2]}v`);
+    res.push(`${vMatch1[1]}.${vMatch1[2]}`);
+  }
+  const vMatch2 = token.match(/^(\d+)\.(\d+)v?$/i);
+  if (vMatch2) {
+    res.push(`${vMatch2[1]}v${vMatch2[2]}`);
+    res.push(`${vMatch2[1]}.${vMatch2[2]}v`);
+  }
+  // 5v <-> 5.0v
+  if (/^(\d+)v$/i.test(token)) {
+    const num = token.replace(/v$/i, '');
+    res.push(`${num}.0v`);
+  }
+  if (/^(\d+)\.0v$/i.test(token)) {
+    const num = token.replace(/\.0v$/i, '');
+    res.push(`${num}v`);
+  }
+  // 100n <-> 100nf
+  if (/^(\d+)n$/i.test(token)) {
+    const num = token.replace(/n$/i, '');
+    res.push(`${num}nf`);
+    res.push(`${num} n`);
+    res.push(`${num} nf`);
+  }
+  if (/^(\d+)nf$/i.test(token)) {
+    const num = token.replace(/nf$/i, '');
+    res.push(`${num}n`);
+    res.push(`${num} n`);
+    res.push(`${num} nf`);
+  }
+  // 10u <-> 10uf
+  if (/^(\d+)u$/i.test(token)) {
+    const num = token.replace(/u$/i, '');
+    res.push(`${num}uf`);
+    res.push(`${num} µf`);
+  }
+  if (/^(\d+)uf$/i.test(token)) {
+    const num = token.replace(/uf$/i, '');
+    res.push(`${num}u`);
+    res.push(`${num} µf`);
+  }
+  // 10k <-> 10kohm
+  if (/^(\d+)k$/i.test(token)) {
+    const num = token.replace(/k$/i, '');
+    res.push(`${num}kohm`);
+    res.push(`${num} k`);
+  }
+  return res;
+}
+
+interface PartIndex {
+  part: ComponentPart;
+  index: number;
+  normAll: string;
+  alphaAll: string;
+  normMpn: string;
+  alphaMpn: string;
+  normId: string;
+  alphaId: string;
+  normLcsc: string;
+  normName: string;
+  normTags: string[];
+}
+
+let cachedIndex: PartIndex[] | null = null;
+
+function getPartIndex(): PartIndex[] {
+  if (cachedIndex && cachedIndex.length === SUPPLIER_PARTS.length) {
+    return cachedIndex;
+  }
+  cachedIndex = SUPPLIER_PARTS.map((p, index) => {
+    const allFields = [
+      p.id,
+      p.mpn,
+      p.manufacturer,
+      p.lcsc,
+      p.pcbwayPart,
+      p.namePl,
+      p.nameEn,
+      p.category,
+      p.pkg,
+      p.voltage,
+      p.current,
+      p.descPl,
+      p.descEn,
+      p.valKind || '',
+      ...(p.tags || []),
+      ...Object.keys(p.pins),
+      ...Object.values(p.pins)
+    ];
+    const normAll = stripDiacritics(allFields.join(' ').toLowerCase());
+    const alphaAll = normAll.replace(/[^a-z0-9]/g, '');
+    const normMpn = stripDiacritics(p.mpn.toLowerCase());
+    const alphaMpn = normMpn.replace(/[^a-z0-9]/g, '');
+    const normId = stripDiacritics(p.id.toLowerCase());
+    const alphaId = normId.replace(/[^a-z0-9]/g, '');
+    const normLcsc = p.lcsc.toLowerCase();
+    const normName = stripDiacritics(`${p.namePl} ${p.nameEn}`.toLowerCase());
+    const normTags = (p.tags || []).map((t) => stripDiacritics(t.toLowerCase()));
+
+    return {
+      part: p,
+      index,
+      normAll,
+      alphaAll,
+      normMpn,
+      alphaMpn,
+      normId,
+      alphaId,
+      normLcsc,
+      normName,
+      normTags
+    };
   });
+  return cachedIndex;
+}
+
+function matchToken(idx: PartIndex, rawToken: string): boolean {
+  const normT = normalizeSearchTerm(rawToken);
+  if (!normT) return true;
+  const alphaT = normT.replace(/[^a-z0-9]/g, '');
+  const p = idx.part;
+
+  // 1. Direct normalized substring match
+  if (idx.normAll.includes(normT)) {
+    return true;
+  }
+
+  // 2. Alphanumeric match ignoring punctuation & hyphens (e.g. "esp-32" vs "esp32", "sot-223" vs "sot223")
+  if (alphaT.length >= 2 && idx.alphaAll.includes(alphaT)) {
+    return true;
+  }
+
+  // 3. Electrical unit conversions (e.g. 3v3 <-> 3.3v, 100n <-> 100nf)
+  const unitVariants = getUnitEquivalents(normT);
+  for (const v of unitVariants) {
+    if (idx.normAll.includes(v)) return true;
+    const alphaV = v.replace(/[^a-z0-9]/g, '');
+    if (alphaV.length >= 2 && idx.alphaAll.includes(alphaV)) return true;
+  }
+
+  // 4. Package and mounting filter shorthands
+  if (normT === 'tht' || normT === 'through-hole') {
+    if (
+      p.pkg.toLowerCase().includes('tht') ||
+      p.pkg.toLowerCase().includes('dip') ||
+      p.pkg.toLowerCase().includes('through-hole') ||
+      p.tags?.some((t) => t.toLowerCase() === 'tht' || t.toLowerCase() === 'through-hole')
+    ) {
+      return true;
+    }
+  }
+  if (normT === 'smd' || normT === 'smt') {
+    if (
+      p.tags?.some((t) => t.toLowerCase() === 'smd' || t.toLowerCase() === 'smt') ||
+      /smd|sot|qfn|soic|sop|tqfp|lqfp|0805|1206|sma/i.test(p.pkg)
+    ) {
+      return true;
+    }
+  }
+  if (normT === 'dip') {
+    if (p.pkg.toLowerCase().includes('dip') || p.tags?.some((t) => t.toLowerCase().includes('dip'))) {
+      return true;
+    }
+  }
+
+  // 5. Polish / English stem & synonym matching
+  for (const group of SYNONYM_GROUPS) {
+    const matchesStem = group.stems.some(
+      (stem) => normT.startsWith(stem) || (normT.length >= 4 && stem.startsWith(normT))
+    );
+    if (!matchesStem) continue;
+
+    // Check if the component matches this synonym group
+    if (group.categories && group.categories.includes(p.category)) {
+      return true;
+    }
+    if (group.valKinds && p.valKind && group.valKinds.includes(p.valKind)) {
+      return true;
+    }
+    if (group.terms.some((term) => idx.normAll.includes(term) || p.tags?.includes(term))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** Computes relevance score for ranking matching items. Higher is better. */
+function calculateScore(idx: PartIndex, tokens: string[]): number {
+  let score = 0;
+  for (const rawToken of tokens) {
+    const normT = normalizeSearchTerm(rawToken);
+    if (!normT) continue;
+    const alphaT = normT.replace(/[^a-z0-9]/g, '');
+
+    // MPN or LCSC exact/prefix match (top priority)
+    if (idx.normMpn === normT || idx.normLcsc === normT) score += 100;
+    else if (idx.normMpn.includes(normT) || (alphaT.length >= 2 && idx.alphaMpn.includes(alphaT))) score += 50;
+
+    // ID match
+    if (idx.normId === normT || idx.alphaId === alphaT) score += 45;
+    else if (idx.normId.includes(normT) || (alphaT.length >= 2 && idx.alphaId.includes(alphaT))) score += 35;
+
+    // Name match
+    if (idx.normName.includes(normT)) score += 30;
+
+    // Tags match
+    if (idx.normTags.some((t) => t === normT || (alphaT.length >= 2 && t.replace(/[^a-z0-9]/g, '') === alphaT))) {
+      score += 25;
+    } else if (idx.normTags.some((t) => t.includes(normT))) {
+      score += 15;
+    }
+
+    // Package match
+    if (idx.part.pkg.toLowerCase().includes(normT)) score += 10;
+  }
+  return score;
+}
+
+/**
+ * Searches the supplier component library with intelligent multi-token matching,
+ * punctuation normalization, Polish/English stem resolution, and category/tag filtering.
+ */
+export function searchSupplierParts(query: string, category?: string, tag?: string): ComponentPart[] {
+  const normCategory = category && category !== 'all' ? category.toLowerCase().trim() : undefined;
+  const normTag = tag && tag !== 'all' ? normalizeSearchTerm(tag) : undefined;
+
+  const rawQuery = (query || '').trim();
+  const tokens = rawQuery ? rawQuery.split(/\s+/).filter(Boolean) : [];
+
+  const index = getPartIndex();
+
+  const matched = index.filter((idx) => {
+    const p = idx.part;
+
+    // 1. Category filter
+    if (normCategory && p.category.toLowerCase() !== normCategory) {
+      return false;
+    }
+
+    // 2. Tag filter
+    if (normTag) {
+      const hasTag = (p.tags || []).some((t) => {
+        const nt = normalizeSearchTerm(t);
+        return nt === normTag || nt.includes(normTag);
+      });
+      if (!hasTag) return false;
+    }
+
+    // 3. Multi-token AND search (all tokens must match)
+    if (tokens.length === 0) {
+      return true;
+    }
+
+    return tokens.every((token) => matchToken(idx, token));
+  });
+
+  // If search query was provided, rank by relevance score
+  if (tokens.length > 0) {
+    matched.sort((a, b) => {
+      const scoreDiff = calculateScore(b, tokens) - calculateScore(a, tokens);
+      if (scoreDiff !== 0) return scoreDiff;
+      return a.index - b.index;
+    });
+  }
+
+  return matched.map((r) => r.part);
 }

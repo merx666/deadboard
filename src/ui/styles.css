@@ -995,6 +995,30 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent); }
 .webgpu-err { flex-direction: column; gap: 12px; overflow-y: auto; }
 .webgpu-err .card { width: min(460px, 100%); }
 
+/* ---------- Parts Bin modal ---------- */
+.modal.parts-bin-modal {
+  width: min(980px, 95vw);
+  max-height: 88vh;
+  overflow: hidden;
+}
+.pb-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+  padding: 14px 16px;
+  overflow: hidden;
+  height: 560px;
+  max-height: calc(88vh - 130px);
+}
+@media (max-width: 768px) {
+  .pb-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+}
+
 /* ---------- mods ---------- */
 .mod-card { display: grid; gap: 8px; }
 .mod-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -1277,6 +1301,7 @@ body.is-mobile .modal-head > div { flex-wrap: wrap; }
 body.is-mobile .modal-head h2 { white-space: nowrap; font-size: 16px; }
 /* close button stays top right when the header wraps */
 body.is-mobile .modal-head #modal-close,
+body.is-mobile .modal-head #partsbin-close,
 body.is-mobile .modal-head #mods-close,
 body.is-mobile .modal-head #help-close,
 body.is-mobile .modal-head #fb-close { position: absolute; top: 8px; right: 10px; width: 40px; height: 40px; }

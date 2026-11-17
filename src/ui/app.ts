@@ -38,6 +38,7 @@ import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsM
 import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
 import { BoardCreatorModal } from './boardCreator';
 import { BOARD_PRESETS } from '../boards/presets';
+import { searchSupplierParts, findPartById, type ComponentPart } from '../parts/catalog';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
 type PanelTab = 'mission' | 'inspect' | 'studio';
@@ -188,6 +189,12 @@ export class PcbApp {
   private showBoards = false;
   private boardFilter: 'all' | 'tutorials' | 'challenges' | 'hardware' | 'mods' = 'all';
   private showMods = false;
+  private showPartsBin = false;
+  private partsBinTargetCompId: string | null = null;
+  private partsBinSearch = '';
+  private partsBinCategory = 'all';
+  private partsBinFilterCompatible = true;
+  private partsBinSelectedPartId: string | null = null;
   /** Ids of the boards that ship with DEADBOARD (built-ins + demos): an author's copy needs its own id. */
   private bundledIds = new Set<string>();
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
@@ -1657,7 +1664,12 @@ export class PcbApp {
 
     this.mount.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        this.setTool(btn.dataset.tool as ToolId);
+        const t = btn.dataset.tool as ToolId;
+        this.setTool(t);
+        if (t === 'replace') {
+          const selected = this.selectedCompId ? this.board.components.find((x) => x.id === this.selectedCompId) ?? null : null;
+          this.openPartsBin(selected);
+        }
         if (this.mobile && this.panelOpen) this.setPanel(false); // back to the board
       });
     });
@@ -2023,13 +2035,14 @@ export class PcbApp {
   }
 
   private onKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && (this.showBoards || this.showHelp || this.showFeedback || this.showMods || this.showShortcuts || this.showReport)) {
+    if (e.key === 'Escape' && (this.showBoards || this.showHelp || this.showFeedback || this.showMods || this.showShortcuts || this.showReport || this.showPartsBin)) {
       this.showBoards = false;
       this.showHelp = false;
       this.showFeedback = false;
       this.showMods = false;
       this.showShortcuts = false;
       this.showReport = false;
+      this.showPartsBin = false;
       this.renderModal();
       return;
     }
@@ -2091,7 +2104,13 @@ export class PcbApp {
       return;
     }
     const t = TOOLS.find((x) => x.key === e.key);
-    if (t) this.setTool(t.id);
+    if (t) {
+      this.setTool(t.id);
+      if (t.id === 'replace') {
+        const selected = this.selectedCompId ? this.board.components.find((x) => x.id === this.selectedCompId) ?? null : null;
+        this.openPartsBin(selected);
+      }
+    }
   }
 
   private resolveBoardPt(raw: V2 | null): { pt: V2; side: Side } | null {
@@ -2414,7 +2433,11 @@ export class PcbApp {
         this.panelOpen = true;
         this.layoutEl.classList.remove('panel-collapsed');
         this.renderUI();
+        this.openPartsBin(c);
+      } else {
+        this.openPartsBin(null);
       }
+      return;
     }
   }
 
@@ -3171,6 +3194,7 @@ export class PcbApp {
       return;
     }
 
+    const isPl = getLang() === 'pl';
     const cSim = this.powerOn && this.sim ? this.sim.comps.get(c.id) : undefined;
     const bands = c.kind === 'resistor' && c.state.populated && !c.state.burnt ? resistorBands(c.value) : null;
     const bandColorCss = (idx: number) => {
@@ -3225,13 +3249,17 @@ export class PcbApp {
       </div>
 
       <div class="card">
-        <div class="card-title">Rework</div>
+        <div class="card-title">${isPl ? 'Prace serwisowe' : 'Rework'}</div>
         <div class="row wrap">
-          ${c.kind === 'switch' ? `<button class="btn sm primary" id="act-toggle-sw">${c.state.closed ? 'Release switch' : 'Press switch'}</button>` : ''}
-          ${c.state.populated ? `<button class="btn sm" id="act-flip180">Rotate 180°</button>` : ''}
-          ${c.state.cold.length ? `<button class="btn sm warn" id="act-reflow">Reflow joints</button>` : ''}
-          ${c.state.populated ? `<button class="btn sm" id="act-desolder">Remove part</button>` : ''}
-          ${!c.state.populated || c.state.burnt ? `<button class="btn sm primary" id="act-fit">Fit new ${this.esc(KIND_NAMES[c.kind].toLowerCase())}</button>` : ''}
+          ${c.kind === 'switch' ? `<button class="btn sm primary" id="act-toggle-sw">${c.state.closed ? (isPl ? 'Zwolnij przełącznik' : 'Release switch') : (isPl ? 'Naciśnij przełącznik' : 'Press switch')}</button>` : ''}
+          ${c.state.populated ? `<button class="btn sm" id="act-flip180">${isPl ? 'Obróć o 180°' : 'Rotate 180°'}</button>` : ''}
+          ${c.state.cold.length ? `<button class="btn sm warn" id="act-reflow">${isPl ? 'Przetop luty' : 'Reflow joints'}</button>` : ''}
+          ${c.state.populated ? `<button class="btn sm" id="act-desolder">${isPl ? 'Wylutuj element' : 'Remove part'}</button>` : ''}
+          ${!c.state.populated || c.state.burnt ? `<button class="btn sm primary" id="act-fit">${isPl ? `Wlutuj nowy ${this.esc(KIND_NAMES[c.kind].toLowerCase())}` : `Fit new ${this.esc(KIND_NAMES[c.kind].toLowerCase())}`}</button>` : ''}
+          <button class="btn sm" id="act-open-catalog" style="background:var(--accent-weak); border-color:var(--accent-line); color:var(--accent); font-weight:600;" title="${isPl ? 'Wybierz podzespół z bazy PCBWay / LCSC' : 'Pick from PCBWay / LCSC catalog'}">
+            ${icon('box', 13)}
+            <span>${isPl ? 'Wybierz z bazy PCBWay / LCSC' : 'Pick from Supplier Catalog'}</span>
+          </button>
         </div>
 
         ${c.kind === 'resistor' ? `
@@ -3323,6 +3351,9 @@ export class PcbApp {
       sfxSolder();
       this.recompute(false);
       this.renderInspectTab();
+    });
+    this.sideBodyEl.querySelector('#act-open-catalog')?.addEventListener('click', () => {
+      this.openPartsBin(c);
     });
     this.sideBodyEl.querySelector('#sel-e12')?.addEventListener('change', (e) => {
       const v = Number((e.target as HTMLSelectElement).value);
@@ -4092,9 +4123,550 @@ export class PcbApp {
     this.toast(`Saved ${manifest.id}.zip: check the name, author and licence in mod.json before sharing.${lockNote}`, lockNote ? 'info' : 'success');
   }
 
+  private openPartsBin(targetComp: Component | null = null) {
+    this.partsBinTargetCompId = targetComp?.id ?? null;
+    this.partsBinCategory = this.getInitialCategoryForComp(targetComp);
+    this.partsBinFilterCompatible = !!targetComp;
+    this.partsBinSearch = '';
+    this.partsBinSelectedPartId = null;
+    this.showPartsBin = true;
+    this.showBoards = false;
+    this.showHelp = false;
+    this.showFeedback = false;
+    this.showMods = false;
+    this.showShortcuts = false;
+    this.showReport = false;
+    this.modalPos = [0, 0];
+    this.renderModal();
+  }
+
+  private getInitialCategoryForComp(c: Component | null): string {
+    if (!c) return 'all';
+    switch (c.kind) {
+      case 'resistor':
+      case 'capacitor':
+      case 'fuse':
+      case 'switch':
+        return 'passives';
+      case 'diode':
+      case 'led':
+        return 'diodes';
+      case 'ic':
+        if (/^(u|reg|ldo|pwr|vr)/i.test(c.ref)) return 'power';
+        if (/^(esp|mod|pico|mcu)/i.test(c.ref)) return 'modules';
+        return 'all';
+      default:
+        return 'all';
+    }
+  }
+
+  private isPartCompatibleWith(part: ComponentPart, c: Component): boolean {
+    const cPkg = c.footprint?.toLowerCase().trim();
+    const pPkg = part.pkg.toLowerCase();
+    const pkgMatch = cPkg ? pPkg.includes(cPkg) || cPkg.includes(pPkg.split(' ')[0]) : false;
+
+    switch (c.kind) {
+      case 'resistor':
+        return part.valKind === 'R' || (part.category === 'passives' && !part.valKind);
+      case 'capacitor':
+        return part.valKind === 'C';
+      case 'fuse':
+        return part.valKind === 'F';
+      case 'diode':
+      case 'led':
+        return part.valKind === 'D' || part.category === 'diodes';
+      case 'ic':
+        return (
+          part.valKind === 'IC' ||
+          part.category === 'power' ||
+          part.category === 'modules' ||
+          part.category === 'interface' ||
+          part.category === 'transistors' ||
+          pkgMatch
+        );
+      default:
+        return true;
+    }
+  }
+
+  private replaceComponentWithPart(c: Component, part: ComponentPart) {
+    this.pushUndo();
+
+    if (part.valKind === 'R') {
+      c.kind = 'resistor';
+      if (part.defaultVal !== undefined) c.value = part.defaultVal;
+    } else if (part.valKind === 'C') {
+      c.kind = 'capacitor';
+      if (part.defaultVal !== undefined) c.value = part.defaultVal;
+    } else if (part.valKind === 'D') {
+      c.kind = 'diode';
+    } else if (part.valKind === 'F') {
+      c.kind = 'fuse';
+      if (part.defaultVal !== undefined) c.value = part.defaultVal;
+    } else if (part.valKind === 'SW') {
+      c.kind = 'switch';
+    } else if (
+      part.valKind === 'IC' ||
+      part.category === 'modules' ||
+      part.category === 'power' ||
+      part.category === 'interface' ||
+      part.category === 'transistors'
+    ) {
+      c.kind = 'ic';
+      if (part.defaultVal !== undefined) c.value = part.defaultVal;
+    }
+
+    c.label = `${part.mpn} (${part.lcsc})`;
+    if (part.pkg) c.footprint = part.pkg;
+
+    installPart(c, {
+      ...(part.defaultVal !== undefined ? { value: part.defaultVal } : {}),
+      reversed: c.state.reversed,
+    });
+
+    if (part.pins && Object.keys(part.pins).length > 0) {
+      c.pins = { ...c.pins, ...part.pins };
+    }
+
+    sfxSolder();
+    this.recompute(false);
+
+    const isPl = getLang() === 'pl';
+    this.toast(
+      isPl
+        ? `Zamontowano ${part.mpn} (${part.lcsc}) w ${c.ref}`
+        : `Fitted ${part.mpn} (${part.lcsc}) at ${c.ref}`,
+      'success'
+    );
+
+    this.showPartsBin = false;
+    this.renderModal();
+
+    if (this.activeTab === 'inspect') {
+      this.renderInspectTab();
+    }
+    this.renderUI();
+  }
+
+  private renderPartsBinModal() {
+    const isPl = getLang() === 'pl';
+    const targetComp = this.partsBinTargetCompId
+      ? this.board.components.find((x) => x.id === this.partsBinTargetCompId) ?? null
+      : null;
+
+    const categories: { id: string; labelPl: string; labelEn: string }[] = [
+      { id: 'all', labelPl: 'Wszystkie kategorie', labelEn: 'All Categories' },
+      { id: 'passives', labelPl: 'Elementy pasywne (R, C, Bezpieczniki)', labelEn: 'Passives (R, C, Fuses)' },
+      { id: 'power', labelPl: 'Zasilanie i regulatory (LDO, Buck, PMIC)', labelEn: 'Power & Regulators (LDO, Buck, PMIC)' },
+      { id: 'modules', labelPl: 'Mikrokontrolery i moduły (ESP32, Pico, MCU)', labelEn: 'MCU & Modules (ESP32, Pico, MCU)' },
+      { id: 'transistors', labelPl: 'Tranzystory MOSFET', labelEn: 'MOSFET Transistors' },
+      { id: 'diodes', labelPl: 'Diody, LED i ochrona ESD', labelEn: 'Diodes, LEDs & ESD Protection' },
+      { id: 'interface', labelPl: 'Interfejsy (USB, UART, Flash)', labelEn: 'Interfaces (USB, UART, Flash)' },
+    ];
+
+    const getParts = () => {
+      let list = searchSupplierParts(this.partsBinSearch, this.partsBinCategory);
+      if (targetComp && this.partsBinFilterCompatible) {
+        list = list.filter((p) => this.isPartCompatibleWith(p, targetComp));
+      }
+      return list;
+    };
+
+    const initialParts = getParts();
+    if (!this.partsBinSelectedPartId && initialParts.length > 0) {
+      this.partsBinSelectedPartId = initialParts[0].id;
+    }
+
+    const renderPinoutTable = (pins: Record<string, string>) => {
+      const entries = Object.entries(pins);
+      if (entries.length === 0) {
+        return `<div style="font-size:12px; color:var(--muted); text-align:center; padding:16px;">${isPl ? 'Brak zdefiniowanych wyprowadzeń dla tego elementu' : 'No pin definitions available for this part'}</div>`;
+      }
+      return `
+        <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border); color: var(--muted); text-align: left;">
+              <th style="padding: 4px 6px; width: 60px;">Pin</th>
+              <th style="padding: 4px 6px;">${isPl ? 'Sygnał / Rola' : 'Signal / Function'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map(([pin, name]) => {
+              const isGnd = /gnd/i.test(name);
+              const isPwr = /(vcc|3v3|5v|vdd|vin|vsys|vbus|pwr|\+)/i.test(name);
+              const col = isGnd ? 'var(--text-2)' : isPwr ? 'var(--warn)' : 'var(--accent)';
+              return `
+                <tr style="border-bottom: 1px solid var(--surface-2);">
+                  <td style="padding: 3px 6px; font-family: var(--mono); color: var(--muted); font-weight: 600;">${this.esc(pin)}</td>
+                  <td style="padding: 3px 6px; font-family: var(--mono); color: ${col}; font-weight: 500;">${this.esc(name)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    };
+
+    const renderDetailPane = (part: ComponentPart | null) => {
+      if (!part) {
+        return `
+          <div class="card" style="padding: 24px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--muted);">
+            <div style="margin-bottom: 10px; opacity: 0.6;">${icon('box', 36)}</div>
+            <div style="font-weight: 600; font-size: 13px; color: var(--text-2); margin-bottom: 6px;">
+              ${isPl ? 'Podgląd podzespołu i pinout' : 'Component Specs & Pinout'}
+            </div>
+            <div style="font-size: 12px; max-width: 260px; line-height: 1.5;">
+              ${targetComp
+                ? (isPl ? `Wybierz część z listy, aby sprawdzić jej wyprowadzenia przed wlutowaniem w ${this.esc(targetComp.ref)}.` : `Select a part from the list to preview its pinout before fitting onto ${this.esc(targetComp.ref)}.`)
+                : (isPl ? 'Wybierz podzespół z listy po lewej, aby zbadać jego parametry techniczne, obudowę i wyprowadzenia sygnałów.' : 'Select a component from the list on the left to inspect its parameters, package, and pinout.')
+              }
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="card" style="padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; height: 100%; display: flex; flex-direction: column;">
+          <div style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+              <div>
+                <div style="font-size: 16px; font-weight: 600; font-family: var(--mono); color: var(--accent);">${this.esc(part.mpn)}</div>
+                <div style="font-size: 12px; color: var(--muted);">${this.esc(part.manufacturer)}</div>
+              </div>
+              <span class="badge info">${this.esc(part.pkg)}</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-2); margin-top: 6px; line-height: 1.4;">
+              ${this.esc(isPl ? part.descPl : part.descEn)}
+            </div>
+          </div>
+
+          <dl class="kv" style="margin: 0 0 10px 0; font-size: 12px;">
+            <dt>LCSC Code</dt><dd class="mono" style="color: var(--accent); font-weight: 600;">${this.esc(part.lcsc)}</dd>
+            <dt>PCBWay Part</dt><dd class="mono">${this.esc(part.pcbwayPart)}</dd>
+            <dt>${isPl ? 'Napięcie robocze' : 'Voltage'}</dt><dd>${this.esc(part.voltage)}</dd>
+            <dt>${isPl ? 'Prąd znamionowy' : 'Current'}</dt><dd>${this.esc(part.current)}</dd>
+            <dt>${isPl ? 'Obudowa / Wymiary' : 'Package / Size'}</dt><dd>${part.footprintWidth} × ${part.footprintHeight} mm (${part.padsCount} ${isPl ? 'padów' : 'pads'})</dd>
+            ${part.defaultVal !== undefined ? `
+              <dt>${isPl ? 'Wartość domyślna' : 'Default Value'}</dt>
+              <dd class="mono">${part.valKind === 'R' ? fmtOhm(part.defaultVal) : part.valKind === 'C' ? fmtSI(part.defaultVal, 'F') : part.valKind === 'F' ? fmtSI(part.defaultVal, 'A') : String(part.defaultVal)}</dd>
+            ` : ''}
+          </dl>
+
+          <!-- Pinout section -->
+          <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+            <div style="font-weight: 600; font-size: 12px; margin-bottom: 6px; color: var(--text-2); display: flex; align-items: center; justify-content: space-between;">
+              <span>${isPl ? 'Wyprowadzenia i sygnały (Pinout)' : 'Pinout & Signal Functions'}</span>
+              <span style="font-size: 11px; color: var(--muted);">${Object.keys(part.pins).length} ${isPl ? 'pinów' : 'pins'}</span>
+            </div>
+            <div style="flex: 1; overflow-y: auto; max-height: 220px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); padding: 4px;">
+              ${renderPinoutTable(part.pins)}
+            </div>
+          </div>
+
+          ${targetComp ? `
+            <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px;">
+              <button class="btn primary sm grow" id="pb-detail-fit" style="width: 100%; justify-content: center; height: 32px; font-weight: 600;">
+                ${icon('iron', 14)}
+                <span>${isPl ? `Zamontuj ${this.esc(part.mpn)} w ${this.esc(targetComp.ref)}` : `Fit ${this.esc(part.mpn)} into ${this.esc(targetComp.ref)}`}</span>
+              </button>
+            </div>
+          ` : `
+            <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px;">
+              <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">
+                ${isPl ? 'Wlutuj w wybrany element na płytce:' : 'Fit onto board component:'}
+              </label>
+              <div class="row">
+                <select id="pb-select-board-comp" class="grow" style="padding: 4px 8px; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text);">
+                  <option value="">${isPl ? '— Wybierz element z płytki —' : '— Select a component —'}</option>
+                  ${this.board.components.map((bc) => `<option value="${this.esc(bc.id)}">${this.esc(bc.ref)} (${this.esc(bc.kind)}) — ${this.esc(marking(bc))}</option>`).join('')}
+                </select>
+                <button class="btn primary sm" id="pb-btn-fit-selected" disabled>
+                  ${icon('iron', 12)}
+                  <span>${isPl ? 'Wlutuj' : 'Fit'}</span>
+                </button>
+              </div>
+            </div>
+          `}
+        </div>
+      `;
+    };
+
+    const renderListHtml = (parts: ComponentPart[]) => {
+      if (parts.length === 0) {
+        return `
+          <div style="padding: 36px 16px; text-align: center; color: var(--muted);">
+            <div style="font-size: 14px; font-weight: 600; color: var(--text-2); margin-bottom: 4px;">
+              ${isPl ? 'Brak pasujących komponentów w katalogu' : 'No matching components in catalog'}
+            </div>
+            <div style="font-size: 12px;">
+              ${isPl ? 'Spróbuj zmienić kategorię lub wyczyścić filtr kompatybilności.' : 'Try changing category or clearing the compatibility filter.'}
+            </div>
+          </div>
+        `;
+      }
+      return parts.map((p) => {
+        const isSelected = p.id === this.partsBinSelectedPartId;
+        return `
+          <div class="card pb-part-card ${isSelected ? 'selected' : ''}" data-part-id="${this.esc(p.id)}" style="padding: 10px 12px; margin-bottom: 8px; cursor: pointer; border: 1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}; background: ${isSelected ? 'var(--surface-3)' : 'var(--surface)'}; border-radius: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+              <div>
+                <div style="font-weight: 600; color: var(--text); font-family: var(--mono); font-size: 13px;">
+                  ${this.esc(p.mpn)}
+                  <span style="font-weight: normal; font-size: 11px; color: var(--muted); margin-left: 6px;">${this.esc(p.manufacturer)}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-2); margin-top: 2px;">
+                  ${this.esc(isPl ? p.namePl : p.nameEn)}
+                </div>
+              </div>
+              <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                <span class="badge info" style="font-size: 10px;">${this.esc(p.pkg)}</span>
+                <span class="badge" style="font-size: 10px; background: rgba(75, 227, 138, 0.12); color: var(--accent); border: 1px solid rgba(75, 227, 138, 0.3);">${this.esc(p.lcsc)}</span>
+              </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 11.5px; color: var(--muted);">
+              <div><b>${isPl ? 'Napięcie:' : 'Voltage:'}</b> ${this.esc(p.voltage)}</div>
+              <div><b>${isPl ? 'Prąd:' : 'Current:'}</b> ${this.esc(p.current)}</div>
+              <div><b>PCBWay:</b> ${this.esc(p.pcbwayPart)}</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px;">
+              <button class="btn sm ghost pb-btn-preview" data-part-id="${this.esc(p.id)}" style="font-size: 11.5px; padding: 2px 8px;">
+                ${icon('box', 12)}
+                <span>${isPl ? 'Wyprowadzenia (Pinout)' : 'Specs & Pinout'}</span>
+              </button>
+              ${targetComp ? `
+                <button class="btn sm primary pb-btn-fit" data-part-id="${this.esc(p.id)}" style="font-size: 11.5px; padding: 2px 10px;">
+                  ${icon('iron', 12)}
+                  <span>${isPl ? `Wlutuj w ${this.esc(targetComp.ref)}` : `Fit into ${this.esc(targetComp.ref)}`}</span>
+                </button>
+              ` : `
+                <button class="btn sm pb-btn-inspect" data-part-id="${this.esc(p.id)}" style="font-size: 11.5px; padding: 2px 8px;">
+                  <span>${isPl ? 'Pokaż szczegóły' : 'Inspect part'}</span>
+                </button>
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    this.modalRootEl.innerHTML = `
+      <div class="modal-backdrop" id="partsbin-close-bg">
+        <div class="modal parts-bin-modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0);">
+          <div class="modal-head" title="${isPl ? 'Przeciągnij, aby przesunąć okno' : 'Drag to move window'}">
+            <div>
+              <h2>${targetComp
+                ? (isPl ? `Magazyn Części (LCSC / PCBWay) — Wymiana dla ${this.esc(targetComp.ref)}` : `Parts Bin (LCSC / PCBWay) — Replace for ${this.esc(targetComp.ref)}`)
+                : (isPl ? 'Magazyn Części (Baza LCSC / PCBWay)' : 'Parts Bin (LCSC & PCBWay Component Library)')
+              }</h2>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                ${targetComp
+                  ? (isPl
+                      ? `Wybierz część z katalogu, aby wlutować ją na płytce w miejsce <b>${this.esc(targetComp.ref)}</b> (aktualnie: ${this.esc(marking(targetComp))}).`
+                      : `Select a catalog part to solder onto the board at <b>${this.esc(targetComp.ref)}</b> (current: ${this.esc(marking(targetComp))}).`)
+                  : (isPl
+                      ? 'Przeglądaj podzespoły z baz LCSC i PCBWay, badaj ich parametry, obudowy i mapy wyprowadzeń (pinout).'
+                      : 'Browse LCSC and PCBWay parts, inspect their technical specs, footprints, and signal pinouts.')
+                }
+              </div>
+            </div>
+            <button class="btn ghost icon sm" id="partsbin-close" title="${isPl ? 'Zamknij (Esc)' : 'Close (Esc)'}">
+              ${icon('x', 14)}
+            </button>
+          </div>
+
+          <div class="cat-toolbar" style="gap: 10px; border-bottom: 1px solid var(--border); padding: 10px 16px; background: var(--surface-2); display: flex; flex-wrap: wrap; align-items: center;">
+            <div style="position: relative; flex: 1; min-width: 200px;">
+              <input
+                type="text"
+                id="partsbin-search"
+                class="grow"
+                placeholder="${isPl ? 'Szukaj po MPN, LCSC (np. C49678), producencie, obudowie (0805, SOT-223)...' : 'Search by MPN, LCSC (e.g. C49678), manufacturer, package (0805, SOT-223)...'}"
+                value="${this.esc(this.partsBinSearch)}"
+                style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text);"
+              />
+            </div>
+            <select
+              id="partsbin-category"
+              style="padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); min-width: 180px;"
+            >
+              ${categories.map((cat) => `
+                <option value="${cat.id}" ${this.partsBinCategory === cat.id ? 'selected' : ''}>
+                  ${isPl ? cat.labelPl : cat.labelEn}
+                </option>
+              `).join('')}
+            </select>
+            ${targetComp ? `
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; user-select: none;">
+                <input type="checkbox" id="pb-chk-compat" ${this.partsBinFilterCompatible ? 'checked' : ''} style="accent-color: var(--accent);" />
+                <span>${isPl ? `Tylko pasujące do ${this.esc(targetComp.ref)}` : `Compatible with ${this.esc(targetComp.ref)} only`}</span>
+              </label>
+            ` : ''}
+          </div>
+
+          <div class="pb-layout">
+            <div style="display: flex; flex-direction: column; overflow: hidden;">
+              <div id="partsbin-count" style="font-size: 12px; color: var(--muted); margin-bottom: 8px; flex-shrink: 0;">
+                ${isPl ? `Znaleziono ${initialParts.length} komponentów w bazie:` : `Found ${initialParts.length} components in library:`}
+              </div>
+              <div id="partsbin-list" style="overflow-y: auto; flex: 1; padding-right: 4px;">
+                ${renderListHtml(initialParts)}
+              </div>
+            </div>
+
+            <div id="partsbin-detail" style="overflow-y: auto;">
+              ${renderDetailPane(this.partsBinSelectedPartId ? findPartById(this.partsBinSelectedPartId) ?? null : null)}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const closeModal = () => {
+      this.showPartsBin = false;
+      this.renderModal();
+    };
+
+    this.modalRootEl.querySelector('#partsbin-close')?.addEventListener('click', closeModal);
+    this.modalRootEl.querySelector('#partsbin-close-bg')?.addEventListener('click', (e) => {
+      if (this.suppressModalBgClose) {
+        this.suppressModalBgClose = false;
+        return;
+      }
+      if ((e.target as HTMLElement).id === 'partsbin-close-bg') closeModal();
+    });
+
+    const searchInput = this.modalRootEl.querySelector<HTMLInputElement>('#partsbin-search');
+    const categorySelect = this.modalRootEl.querySelector<HTMLSelectElement>('#partsbin-category');
+    const compatCheckbox = this.modalRootEl.querySelector<HTMLInputElement>('#pb-chk-compat');
+    const partsListEl = this.modalRootEl.querySelector<HTMLElement>('#partsbin-list');
+    const countEl = this.modalRootEl.querySelector<HTMLElement>('#partsbin-count');
+    const detailEl = this.modalRootEl.querySelector<HTMLElement>('#partsbin-detail');
+
+    const updateDetail = () => {
+      const part = this.partsBinSelectedPartId
+        ? findPartById(this.partsBinSelectedPartId) ?? null
+        : null;
+      if (detailEl) {
+        detailEl.innerHTML = renderDetailPane(part);
+        bindDetailActions(part);
+      }
+    };
+
+    const bindDetailActions = (part: ComponentPart | null) => {
+      if (!part) return;
+      if (targetComp) {
+        this.modalRootEl.querySelector('#pb-detail-fit')?.addEventListener('click', () => {
+          this.replaceComponentWithPart(targetComp, part);
+        });
+      } else {
+        const boardCompSelect = this.modalRootEl.querySelector<HTMLSelectElement>('#pb-select-board-comp');
+        const fitBtn = this.modalRootEl.querySelector<HTMLButtonElement>('#pb-btn-fit-selected');
+        boardCompSelect?.addEventListener('change', () => {
+          if (fitBtn) fitBtn.disabled = !boardCompSelect.value;
+        });
+        fitBtn?.addEventListener('click', () => {
+          const compId = boardCompSelect?.value;
+          if (!compId) return;
+          const target = this.board.components.find((bc) => bc.id === compId);
+          if (target) {
+            this.replaceComponentWithPart(target, part);
+          }
+        });
+      }
+    };
+
+    const bindListActions = () => {
+      this.modalRootEl.querySelectorAll<HTMLElement>('.pb-part-card').forEach((card) => {
+        const partId = card.dataset.partId;
+        if (!partId) return;
+
+        card.addEventListener('click', (e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('.pb-btn-fit') || target.closest('.pb-btn-preview')) return;
+
+          this.partsBinSelectedPartId = partId;
+          this.modalRootEl.querySelectorAll('.pb-part-card').forEach((c) => {
+            const sel = (c as HTMLElement).dataset.partId === partId;
+            c.classList.toggle('selected', sel);
+            (c as HTMLElement).style.borderColor = sel ? 'var(--accent)' : 'var(--border)';
+            (c as HTMLElement).style.background = sel ? 'var(--surface-3)' : 'var(--surface)';
+          });
+          updateDetail();
+        });
+      });
+
+      this.modalRootEl.querySelectorAll<HTMLButtonElement>('.pb-btn-preview, .pb-btn-inspect').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const partId = btn.dataset.partId;
+          if (!partId) return;
+          this.partsBinSelectedPartId = partId;
+          this.modalRootEl.querySelectorAll('.pb-part-card').forEach((c) => {
+            const sel = (c as HTMLElement).dataset.partId === partId;
+            c.classList.toggle('selected', sel);
+            (c as HTMLElement).style.borderColor = sel ? 'var(--accent)' : 'var(--border)';
+            (c as HTMLElement).style.background = sel ? 'var(--surface-3)' : 'var(--surface)';
+          });
+          updateDetail();
+        });
+      });
+
+      this.modalRootEl.querySelectorAll<HTMLButtonElement>('.pb-btn-fit').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const partId = btn.dataset.partId;
+          if (!partId || !targetComp) return;
+          const part = findPartById(partId);
+          if (part) this.replaceComponentWithPart(targetComp, part);
+        });
+      });
+    };
+
+    const updateList = () => {
+      const parts = getParts();
+      if (countEl) {
+        countEl.textContent = isPl
+          ? `Znaleziono ${parts.length} komponentów w bazie:`
+          : `Found ${parts.length} components in library:`;
+      }
+      if (partsListEl) {
+        partsListEl.innerHTML = renderListHtml(parts);
+        bindListActions();
+      }
+      if (this.partsBinSelectedPartId && !parts.some((p) => p.id === this.partsBinSelectedPartId)) {
+        this.partsBinSelectedPartId = parts[0]?.id ?? null;
+      } else if (!this.partsBinSelectedPartId && parts.length > 0) {
+        this.partsBinSelectedPartId = parts[0].id;
+      }
+      updateDetail();
+    };
+
+    searchInput?.addEventListener('input', () => {
+      this.partsBinSearch = searchInput.value;
+      updateList();
+    });
+
+    categorySelect?.addEventListener('change', () => {
+      this.partsBinCategory = categorySelect.value;
+      updateList();
+    });
+
+    compatCheckbox?.addEventListener('change', () => {
+      this.partsBinFilterCompatible = compatCheckbox.checked;
+      updateList();
+    });
+
+    bindListActions();
+    bindDetailActions(this.partsBinSelectedPartId ? findPartById(this.partsBinSelectedPartId) ?? null : null);
+  }
+
   private renderModal() {
     this.mount.querySelector('#btn-boards')?.classList.toggle('active', this.showBoards);
     this.mount.querySelector('#btn-feedback')?.classList.toggle('active', this.showFeedback);
+    if (this.showPartsBin) {
+      this.renderPartsBinModal();
+      return;
+    }
     if (this.showBoards) {
       this.renderBoardsModal();
       return;
