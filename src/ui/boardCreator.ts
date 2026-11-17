@@ -1,11 +1,13 @@
 // Interactive Custom Board Builder & Supplier Parts Catalog (PCBWay / LCSC / DigiKey)
-import { searchSupplierParts } from '../parts/catalog';
+import { searchSupplierParts, type ComponentPart } from '../parts/catalog';
 import { BOARD_PRESETS } from '../boards/presets';
 import { Builder } from '../scenarios/builder';
 import type { Scenario } from '../types';
 import { getLang } from '../i18n';
 import { writeZip } from '../mods/zip';
 import { icon } from './icons';
+
+export type FaultKind = 'none' | 'short-rail' | 'cold-joint' | 'reversed-diode' | 'blown-fuse';
 
 export interface BoardCreatorOptions {
   onLoadScenario: (scenario: Scenario) => void;
@@ -23,7 +25,14 @@ export class BoardCreatorModal {
   private customColor = '#124422';
   private searchQuery = '';
   private selectedCategory = 'all';
-  private injectFault: 'none' | 'short-rail' | 'cold-joint' | 'reversed-diode' | 'blown-fuse' = 'none';
+  private injectFault: FaultKind = 'none';
+
+  private handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      this.close();
+    }
+  };
 
   constructor(opts: BoardCreatorOptions) {
     this.opts = opts;
@@ -35,9 +44,11 @@ export class BoardCreatorModal {
   show() {
     this.render();
     document.body.appendChild(this.el);
+    window.addEventListener('keydown', this.handleKeyDown);
   }
 
   close() {
+    window.removeEventListener('keydown', this.handleKeyDown);
     this.el.remove();
     this.opts.onClose();
   }
@@ -46,29 +57,37 @@ export class BoardCreatorModal {
     const isPl = getLang() === 'pl';
 
     this.el.innerHTML = `
-      <div class="modal card" style="max-width: 900px; width: 95vw; max-height: 90vh; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
-        <div class="row" style="justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+      <div class="modal" style="width: min(920px, 94vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;" role="dialog" aria-modal="true" aria-labelledby="creator-title">
+        <!-- Header -->
+        <div class="modal-head" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border);">
           <div class="row" style="gap: 10px; align-items: center;">
-            <div class="card-ic" style="width: 34px; height: 34px;">${icon('grid', 18)}</div>
+            <div style="color: var(--accent);">${icon('grid', 20)}</div>
             <div>
-              <h2 style="font-size: 19px; margin: 0; font-family: var(--mono);">${isPl ? 'Kreator Własnych Płytek i Baza Części' : 'Custom Board Builder & Parts Catalog'}</h2>
-              <p class="muted" style="margin: 2px 0 0; font-size: 13px;">${isPl ? 'Twórz nowe płytki, dobieraj części PCBWay / LCSC i eksportuj jako mody lub wyzwania' : 'Build custom boards, select PCBWay/LCSC parts, export as mods or challenges'}</p>
+              <h2 id="creator-title" style="margin: 0; font-size: 17px; font-weight: 700;">
+                ${isPl ? 'Kreator Płytek & Baza Komponentów PCBWay / LCSC' : 'Board Creator & PCBWay / LCSC Parts Database'}
+              </h2>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                ${isPl ? 'Projektuj obwody, wstrzykuj usterki do wyzwań i dobieraj części produkcyjne' : 'Design circuits, inject faults for challenges, and source production components'}
+              </div>
             </div>
           </div>
-          <button class="btn ghost icon" id="btn-close-creator" title="${isPl ? 'Zamknij' : 'Close'}">${icon('x', 16)}</button>
+          <button class="btn ghost icon sm" id="btn-close-creator" title="Zamknij (Esc)" aria-label="Zamknij">
+            ${icon('x', 14)}
+          </button>
         </div>
 
         <!-- Navigation Tabs -->
-        <div class="row" style="gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <div class="cat-toolbar" style="padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
           <button class="btn sm ${this.activeTab === 'builder' ? 'primary' : 'ghost'}" id="tab-btn-builder">
-            ${icon('grid', 14)}<span>${isPl ? '1. Kreator Płytek i Modów' : '1. Board & Mod Builder'}</span>
+            ${icon('edit', 14)}<span>${isPl ? 'Kreator Obwodów i Modyfikacji' : 'Circuit & Mod Builder'}</span>
           </button>
           <button class="btn sm ${this.activeTab === 'catalog' ? 'primary' : 'ghost'}" id="tab-btn-catalog">
-            ${icon('tools', 14)}<span>${isPl ? '2. Baza Części (PCBWay / LCSC)' : '2. Parts Catalog (PCBWay / LCSC)'}</span>
+            ${icon('search', 14)}<span>${isPl ? 'Baza Części (PCBWay / LCSC / DigiKey)' : 'Parts Catalog (PCBWay / LCSC)'}</span>
           </button>
         </div>
 
-        <div id="creator-tab-content">
+        <!-- Tab Content Body -->
+        <div id="creator-tab-content" style="padding: 18px; overflow-y: auto; flex: 1;">
           ${this.activeTab === 'builder' ? this.renderBuilderTab(isPl) : this.renderCatalogTab(isPl)}
         </div>
       </div>
@@ -79,72 +98,68 @@ export class BoardCreatorModal {
 
   private renderBuilderTab(isPl: boolean): string {
     return `
-      <div style="display: flex; flex-direction: column; gap: 18px;">
-        <!-- Preset selector -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Board preset selector -->
         <div>
-          <label style="font-weight: 600; font-size: 14px; display: block; margin-bottom: 8px;">
-            ${isPl ? 'Wybierz szablon bazowy lub architekturę modułu:' : 'Choose base template or module architecture:'}
+          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text);">
+            ${isPl ? '1. Wybierz szablon startowy płytki lub modułu:' : '1. Select starting board or module template:'}
           </label>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+            <div class="card preset-card ${this.selectedPresetId === 'custom-blank' ? 'active-preset' : ''}"
+                 data-preset="custom-blank"
+                 style="cursor: pointer; padding: 12px; border: 1px solid ${this.selectedPresetId === 'custom-blank' ? 'var(--accent)' : 'var(--border)'}; background: var(--surface);">
+              <div style="font-weight: 700; color: var(--accent); font-size: 14px;">+ ${isPl ? 'Czysty laminat PCB' : 'Blank Prototyping PCB'}</div>
+              <p style="font-size: 12px; color: var(--text-2); margin: 4px 0 0;">${isPl ? 'Pusta płytka o zadanych wymiarach z punktami lutowniczymi.' : 'Clean blank PCB board with custom dimensions.'}</p>
+            </div>
             ${BOARD_PRESETS.map((p) => `
-              <div class="card preset-card ${this.selectedPresetId === p.id ? 'active' : ''}" data-preset="${p.id}"
-                   style="cursor: pointer; padding: 14px; border: 1px solid ${this.selectedPresetId === p.id ? 'var(--accent)' : 'var(--border)'}; background: ${this.selectedPresetId === p.id ? 'var(--accent-weak)' : 'var(--surface)'}; border-radius: 8px;">
-                <div style="font-weight: 700; font-size: 14px; color: ${this.selectedPresetId === p.id ? 'var(--accent)' : 'var(--text)'};">
-                  ${isPl ? p.titlePl : p.titleEn}
-                </div>
-                <p style="margin: 6px 0 0; font-size: 12px; color: var(--text-2); line-height: 1.4;">
-                  ${isPl ? p.descPl : p.descEn}
-                </p>
+              <div class="card preset-card ${this.selectedPresetId === p.id ? 'active-preset' : ''}"
+                   data-preset="${p.id}"
+                   style="cursor: pointer; padding: 12px; border: 1px solid ${this.selectedPresetId === p.id ? 'var(--accent)' : 'var(--border)'}; background: var(--surface);">
+                <div style="font-weight: 700; color: var(--text); font-size: 14px;">${isPl ? p.titlePl : p.titleEn}</div>
+                <p style="font-size: 12px; color: var(--text-2); margin: 4px 0 0;">${isPl ? p.descPl : p.descEn}</p>
               </div>
             `).join('')}
-            <div class="card preset-card ${this.selectedPresetId === 'custom-blank' ? 'active' : ''}" data-preset="custom-blank"
-                 style="cursor: pointer; padding: 14px; border: 1px solid ${this.selectedPresetId === 'custom-blank' ? 'var(--accent)' : 'var(--border)'}; background: ${this.selectedPresetId === 'custom-blank' ? 'var(--accent-weak)' : 'var(--surface)'}; border-radius: 8px;">
-              <div style="font-weight: 700; font-size: 14px; color: ${this.selectedPresetId === 'custom-blank' ? 'var(--accent)' : 'var(--text)'};">
-                ${isPl ? '✨ Nowa Pusta Płytka (Własne Wymiary)' : '✨ Custom Blank Prototyping Board'}
-              </div>
-              <p style="margin: 6px 0 0; font-size: 12px; color: var(--text-2); line-height: 1.4;">
-                ${isPl ? 'Czysty laminat FR-4 o dowolnej szerokości i wysokości, gotowy na wstawianie komponentów z bazy.' : 'Empty FR-4 laminate with custom width/height ready for components from catalog.'}
-              </p>
-            </div>
           </div>
         </div>
 
-        <!-- Custom board settings -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; background: var(--surface-2); padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+        <!-- Board specifications -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
           <div>
-            <label style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px;">${isPl ? 'Szerokość płytki (mm)' : 'Board Width (mm)'}</label>
-            <input type="number" id="inp-board-w" value="${this.customWidth}" min="30" max="250" style="width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" />
+            <label for="inp-board-w" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">${isPl ? 'Szerokość płytki (mm)' : 'Board Width (mm)'}</label>
+            <input type="number" id="inp-board-w" value="${this.customWidth}" min="30" max="250"
+                   style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" />
           </div>
           <div>
-            <label style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px;">${isPl ? 'Wysokość płytki (mm)' : 'Board Height (mm)'}</label>
-            <input type="number" id="inp-board-h" value="${this.customHeight}" min="20" max="200" style="width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" />
+            <label for="inp-board-h" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">${isPl ? 'Wysokość płytki (mm)' : 'Board Height (mm)'}</label>
+            <input type="number" id="inp-board-h" value="${this.customHeight}" min="20" max="200"
+                   style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" />
           </div>
           <div>
-            <label style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px;">${isPl ? 'Kolor maski lutowniczej' : 'Solder Mask Color'}</label>
-            <select id="inp-board-color" style="width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
-              <option value="#124422" ${this.customColor === '#124422' ? 'selected' : ''}>${isPl ? 'Zielony klasyczny (FR-4)' : 'Classic Green (FR-4)'}</option>
-              <option value="#0b2b40" ${this.customColor === '#0b2b40' ? 'selected' : ''}>${isPl ? 'Niebieski (Arduino Blue)' : 'Blue (Arduino Blue)'}</option>
-              <option value="#18181a" ${this.customColor === '#18181a' ? 'selected' : ''}>${isPl ? 'Czarny mat (Matte Black)' : 'Matte Black'}</option>
-              <option value="#401414" ${this.customColor === '#401414' ? 'selected' : ''}>${isPl ? 'Czerwony (Cherry Red)' : 'Cherry Red'}</option>
-              <option value="#2c1638" ${this.customColor === '#2c1638' ? 'selected' : ''}>${isPl ? 'Fioletowy (Purple OSHPark)' : 'Purple (OSHPark)'}</option>
+            <label for="inp-board-color" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">${isPl ? 'Kolor soldermaski' : 'Solder Mask Color'}</label>
+            <select id="inp-board-color" style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
+              <option value="#124422" ${this.customColor === '#124422' ? 'selected' : ''}>Zielony (Classic Green)</option>
+              <option value="#0b2b40" ${this.customColor === '#0b2b40' ? 'selected' : ''}>Niebieski (Arduino Blue)</option>
+              <option value="#40121a" ${this.customColor === '#40121a' ? 'selected' : ''}>Czerwony (SparkFun Red)</option>
+              <option value="#301538" ${this.customColor === '#301538' ? 'selected' : ''}>Fioletowy (OSH Park Purple)</option>
+              <option value="#16181b" ${this.customColor === '#16181b' ? 'selected' : ''}>Czarny matowy (Matte Black)</option>
             </select>
           </div>
           <div>
-            <label style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px;">${isPl ? 'Wstrzyknij usterkę do wyzwania:' : 'Inject fault for challenge:'}</label>
-            <select id="inp-board-fault" style="width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
-              <option value="none" ${this.injectFault === 'none' ? 'selected' : ''}>${isPl ? 'Brak (Płytka w pełni sprawna)' : 'None (Fully functional board)'}</option>
-              <option value="short-rail" ${this.injectFault === 'short-rail' ? 'selected' : ''}>${isPl ? '⚡ Zwarcie szyny 3.3V do masy' : '⚡ 3.3V rail shorted to Ground'}</option>
-              <option value="cold-joint" ${this.injectFault === 'cold-joint' ? 'selected' : ''}>${isPl ? '❄️ Zimny lut na zasilaniu (brak styku)' : '❄️ Cold solder joint on power pin'}</option>
-              <option value="reversed-diode" ${this.injectFault === 'reversed-diode' ? 'selected' : ''}>${isPl ? '🔄 Odwrotnie wlutowana dioda' : '🔄 Reversed diode polarity'}</option>
-              <option value="blown-fuse" ${this.injectFault === 'blown-fuse' ? 'selected' : ''}>${isPl ? '💥 Przepalony bezpiecznik wejściowy' : '💥 Blown input protection fuse'}</option>
+            <label for="inp-board-fault" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">${isPl ? 'Wstrzyknij usterkę (do wyzwań)' : 'Inject Fault (Challenge Mode)'}</label>
+            <select id="inp-board-fault" style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
+              <option value="none" ${this.injectFault === 'none' ? 'selected' : ''}>${isPl ? 'Brak (Sprawna płyta)' : 'None (Working board)'}</option>
+              <option value="short-rail" ${this.injectFault === 'short-rail' ? 'selected' : ''}>${isPl ? 'Zwarcie szyny zasilania (MLCC 0.2Ω)' : 'Power Rail Short (MLCC 0.2Ω)'}</option>
+              <option value="cold-joint" ${this.injectFault === 'cold-joint' ? 'selected' : ''}>${isPl ? 'Zimny lut na rezystorze/zasilaniu' : 'Cold solder joint on resistor'}</option>
+              <option value="reversed-diode" ${this.injectFault === 'reversed-diode' ? 'selected' : ''}>${isPl ? 'Odwrotnie wlutowana dioda' : 'Reversed diode polarity'}</option>
+              <option value="blown-fuse" ${this.injectFault === 'blown-fuse' ? 'selected' : ''}>${isPl ? 'Przepalony bezpiecznik zasilania' : 'Blown input fuse'}</option>
             </select>
           </div>
         </div>
 
         <!-- Action buttons -->
-        <div class="row" style="gap: 12px; flex-wrap: wrap; margin-top: 8px;">
-          <button class="btn primary" id="btn-load-bench" style="flex: 1; min-width: 220px; justify-content: center;">
-            ${icon('power', 16)}<span>${isPl ? 'Otwórz natychmiast na stole warsztatowym' : 'Open immediately on the bench'}</span>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 6px;">
+          <button class="btn primary" id="btn-load-bench" style="justify-content: center; font-size: 14px;">
+            ${icon('check', 16)}<span>${isPl ? 'Załaduj na stół warsztatowy' : 'Load onto Workbench'}</span>
           </button>
           <button class="btn ghost" id="btn-export-json" style="justify-content: center;">
             ${icon('save', 16)}<span>${isPl ? 'Pobierz (.pcbfix.json)' : 'Download (.pcbfix.json)'}</span>
@@ -155,6 +170,39 @@ export class BoardCreatorModal {
         </div>
       </div>
     `;
+  }
+
+  private renderPartsCards(parts: ComponentPart[], isPl: boolean): string {
+    if (!parts.length) {
+      return `
+        <div style="grid-column: 1 / -1; padding: 32px 16px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--border); border-radius: 8px;">
+          ${isPl ? 'Nie znaleziono komponentów pasujących do podanych kryteriów.' : 'No components found matching search criteria.'}
+        </div>
+      `;
+    }
+
+    return parts.map((p) => `
+      <div class="card" style="padding: 12px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); background: var(--surface);">
+        <div class="row" style="justify-content: space-between; align-items: flex-start;">
+          <div>
+            <span style="font-weight: 700; font-family: var(--mono); color: var(--accent); font-size: 14px;">${p.mpn}</span>
+            <div style="font-size: 11px; color: var(--muted);">${p.manufacturer}</div>
+          </div>
+          <span class="badge info" style="font-size: 11px;">${p.pkg}</span>
+        </div>
+        <div style="font-size: 13px; font-weight: 600; color: var(--text);">
+          ${isPl ? p.namePl : p.nameEn}
+        </div>
+        <p style="font-size: 12px; color: var(--text-2); margin: 0; line-height: 1.35; flex: 1;">
+          ${isPl ? p.descPl : p.descEn}
+        </p>
+        <div style="font-size: 11px; font-family: var(--mono); color: var(--muted); display: grid; gap: 2px; margin-top: 4px; background: var(--bg); padding: 6px 8px; border-radius: 4px;">
+          <div><b>LCSC:</b> ${p.lcsc} · <b>PCBWay:</b> ${p.pcbwayPart}</div>
+          <div><b>${isPl ? 'Parametry:' : 'Params:'}</b> ${p.voltage}</div>
+          <div><b>${isPl ? 'Prąd:' : 'Current:'}</b> ${p.current}</div>
+        </div>
+      </div>
+    `).join('');
   }
 
   private renderCatalogTab(isPl: boolean): string {
@@ -177,37 +225,30 @@ export class BoardCreatorModal {
           </select>
         </div>
 
-        <div style="font-size: 13px; color: var(--muted);">
+        <div id="catalog-parts-count" style="font-size: 13px; color: var(--muted);">
           ${isPl ? `Znaleziono ${parts.length} komponentów z oznaczeniami PCBWay i LCSC:` : `Found ${parts.length} supplier components with PCBWay & LCSC part numbers:`}
         </div>
 
         <!-- Parts list -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto;">
-          ${parts.map((p) => `
-            <div class="card" style="padding: 12px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); background: var(--surface);">
-              <div class="row" style="justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <span style="font-weight: 700; font-family: var(--mono); color: var(--accent); font-size: 14px;">${p.mpn}</span>
-                  <div style="font-size: 11px; color: var(--muted);">${p.manufacturer}</div>
-                </div>
-                <span class="badge info" style="font-size: 11px;">${p.pkg}</span>
-              </div>
-              <div style="font-size: 13px; font-weight: 600; color: var(--text);">
-                ${isPl ? p.namePl : p.nameEn}
-              </div>
-              <p style="font-size: 12px; color: var(--text-2); margin: 0; line-height: 1.35; flex: 1;">
-                ${isPl ? p.descPl : p.descEn}
-              </p>
-              <div style="font-size: 11px; font-family: var(--mono); color: var(--muted); display: grid; gap: 2px; margin-top: 4px; background: var(--bg); padding: 6px 8px; border-radius: 4px;">
-                <div><b>LCSC:</b> ${p.lcsc} · <b>PCBWay:</b> ${p.pcbwayPart}</div>
-                <div><b>Napięcie/Parametry:</b> ${p.voltage}</div>
-                <div><b>Prąd:</b> ${p.current}</div>
-              </div>
-            </div>
-          `).join('')}
+        <div id="catalog-parts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto;">
+          ${this.renderPartsCards(parts, isPl)}
         </div>
       </div>
     `;
+  }
+
+  private updateCatalogGrid(isPl: boolean) {
+    const parts = searchSupplierParts(this.searchQuery, this.selectedCategory);
+    const countEl = this.el.querySelector('#catalog-parts-count');
+    if (countEl) {
+      countEl.textContent = isPl
+        ? `Znaleziono ${parts.length} komponentów z oznaczeniami PCBWay i LCSC:`
+        : `Found ${parts.length} supplier components with PCBWay & LCSC part numbers:`;
+    }
+    const gridEl = this.el.querySelector('#catalog-parts-grid');
+    if (gridEl) {
+      gridEl.innerHTML = this.renderPartsCards(parts, isPl);
+    }
   }
 
   private generateScenario(): Scenario {
@@ -219,14 +260,15 @@ export class BoardCreatorModal {
       b.text([this.customWidth / 2, this.customHeight - 4], 'DESIGNED WITH DEADBOARD STUDIO', 1.2);
       const board = b.b;
       board.color = this.customColor;
+
       sc = {
         format: 'pcbfix/1',
-        id: 'custom-' + Date.now().toString(36),
+        id: `custom-board-${Date.now().toString(36)}`,
         meta: {
-          title: 'Własna Płytka Prototypowa',
-          author: 'Twórca',
+          title: `Custom Board (${this.customWidth}x${this.customHeight}mm)`,
+          author: 'DEADBOARD Maker',
           difficulty: 1,
-          description: 'Czysty laminat z wbudowanym polem prototypowym.',
+          description: 'Własny projekt płytki PCB przygotowany w warsztacie DEADBOARD.',
           hints: ['Użyj narzędzi lutownicy i magazynu części do obsadzenia elementów.'],
           license: 'CC0-1.0'
         },
@@ -249,16 +291,15 @@ export class BoardCreatorModal {
     if (this.injectFault === 'none') return;
 
     if (this.injectFault === 'short-rail') {
-      // Find capacitor or component connected to power rail and short it
       const cap = sc.board.components.find((c) => c.ref.startsWith('C') || c.ref.includes('LDO'));
       if (cap) {
-        cap.state.leak = { ohms: 0.2 }; // Hard short 0.2 ohms to mass
+        cap.state.leak = { ohms: 0.2 };
         sc.meta.description += ' [Usterka: Zwarcie szyny zasilania!]';
       }
     } else if (this.injectFault === 'cold-joint') {
       const r = sc.board.components.find((c) => c.ref.startsWith('R') || c.ref.startsWith('F'));
       if (r) {
-        r.state.cold = [0]; // Cold solder joint on pad 0
+        r.state.cold = [0];
         sc.meta.description += ' [Usterka: Zimny lut na zasilaniu!]';
       }
     } else if (this.injectFault === 'reversed-diode') {
@@ -277,6 +318,11 @@ export class BoardCreatorModal {
   }
 
   private bindEvents(isPl: boolean) {
+    // Backdrop click outside to close
+    this.el.addEventListener('click', (e) => {
+      if (e.target === this.el) this.close();
+    });
+
     this.el.querySelector('#btn-close-creator')?.addEventListener('click', () => this.close());
 
     this.el.querySelector('#tab-btn-builder')?.addEventListener('click', () => {
@@ -301,36 +347,30 @@ export class BoardCreatorModal {
     });
 
     // Custom board inputs
-    const inpW = this.el.querySelector('#inp-board-w') as HTMLInputElement;
-    if (inpW) inpW.addEventListener('change', () => { this.customWidth = Math.max(30, Math.min(250, Number(inpW.value) || 80)); });
+    const inpW = this.el.querySelector('#inp-board-w') as HTMLInputElement | null;
+    inpW?.addEventListener('change', () => { this.customWidth = Math.max(30, Math.min(250, Number(inpW.value) || 80)); });
 
-    const inpH = this.el.querySelector('#inp-board-h') as HTMLInputElement;
-    if (inpH) inpH.addEventListener('change', () => { this.customHeight = Math.max(20, Math.min(200, Number(inpH.value) || 50)); });
+    const inpH = this.el.querySelector('#inp-board-h') as HTMLInputElement | null;
+    inpH?.addEventListener('change', () => { this.customHeight = Math.max(20, Math.min(200, Number(inpH.value) || 50)); });
 
-    const inpColor = this.el.querySelector('#inp-board-color') as HTMLSelectElement;
-    if (inpColor) inpColor.addEventListener('change', () => { this.customColor = inpColor.value; });
+    const inpColor = this.el.querySelector('#inp-board-color') as HTMLSelectElement | null;
+    inpColor?.addEventListener('change', () => { this.customColor = inpColor.value; });
 
-    const inpFault = this.el.querySelector('#inp-board-fault') as HTMLSelectElement;
-    if (inpFault) inpFault.addEventListener('change', () => { this.injectFault = inpFault.value as any; });
+    const inpFault = this.el.querySelector('#inp-board-fault') as HTMLSelectElement | null;
+    inpFault?.addEventListener('change', () => { this.injectFault = inpFault.value as FaultKind; });
 
-    // Catalog search & filter
-    const catSearch = this.el.querySelector('#catalog-search') as HTMLInputElement;
-    if (catSearch) {
-      catSearch.addEventListener('input', () => {
-        this.searchQuery = catSearch.value;
-        const container = this.el.querySelector('#creator-tab-content');
-        if (container) container.innerHTML = this.renderCatalogTab(isPl);
-      });
-    }
+    // Catalog search & filter with retained focus
+    const catSearch = this.el.querySelector('#catalog-search') as HTMLInputElement | null;
+    catSearch?.addEventListener('input', () => {
+      this.searchQuery = catSearch.value;
+      this.updateCatalogGrid(isPl);
+    });
 
-    const catSelect = this.el.querySelector('#catalog-category') as HTMLSelectElement;
-    if (catSelect) {
-      catSelect.addEventListener('change', () => {
-        this.selectedCategory = catSelect.value;
-        const container = this.el.querySelector('#creator-tab-content');
-        if (container) container.innerHTML = this.renderCatalogTab(isPl);
-      });
-    }
+    const catSelect = this.el.querySelector('#catalog-category') as HTMLSelectElement | null;
+    catSelect?.addEventListener('change', () => {
+      this.selectedCategory = catSelect.value;
+      this.updateCatalogGrid(isPl);
+    });
 
     // Action: Load on Bench
     this.el.querySelector('#btn-load-bench')?.addEventListener('click', () => {
@@ -397,6 +437,7 @@ export class BoardCreatorModal {
         a.download = `${sc.id}.pcbfix.json`;
         a.click();
         URL.revokeObjectURL(url);
+        this.opts.toast(isPl ? `Pobrano plik ${sc.id}.pcbfix.json` : `Downloaded ${sc.id}.pcbfix.json`, 'success');
       }
     });
   }

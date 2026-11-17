@@ -239,9 +239,17 @@ if (log && !reduce && 'IntersectionObserver' in window) {
 
 // Initialize 3D Interactive Hero Viewer
 const heroCanvas = document.querySelector<HTMLCanvasElement>('#hero-3d-canvas');
+const heroLoader = document.querySelector<HTMLElement>('#hero-3d-loader');
 let heroViewer: Hero3DViewer | null = null;
 if (heroCanvas) {
-  heroViewer = new Hero3DViewer(heroCanvas);
+  heroViewer = new Hero3DViewer(heroCanvas, {
+    onLoadingChange: (loading, text) => {
+      if (heroLoader) {
+        heroLoader.textContent = text || '';
+        heroLoader.classList.toggle('active', loading);
+      }
+    }
+  });
   void heroViewer.init();
 
   const btnOrbit = document.querySelector<HTMLButtonElement>('#hero-btn-orbit');

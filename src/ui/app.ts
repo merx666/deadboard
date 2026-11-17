@@ -2023,11 +2023,13 @@ export class PcbApp {
   }
 
   private onKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && (this.showBoards || this.showHelp || this.showFeedback || this.showMods)) {
+    if (e.key === 'Escape' && (this.showBoards || this.showHelp || this.showFeedback || this.showMods || this.showShortcuts || this.showReport)) {
       this.showBoards = false;
       this.showHelp = false;
       this.showFeedback = false;
       this.showMods = false;
+      this.showShortcuts = false;
+      this.showReport = false;
       this.renderModal();
       return;
     }
