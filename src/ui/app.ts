@@ -33,9 +33,11 @@ import { setSoundEnabled, sfxBeep, sfxBlow, sfxClick, sfxCut, sfxSolder, sfxWin,
 import { icon } from './icons';
 import { mountFeedbackForm, type FeedbackContext } from './feedback';
 import { BRAND, markSvg } from './logo';
-import { BEGINNER_PRIMER_HTML, TUTORIAL_SCENARIO_IDS, TUTORIAL_TOPICS, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
+import { getBeginnerPrimerHtml, TUTORIAL_SCENARIO_IDS, getTutorialTopics, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
 import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsMobileLayout } from './touch';
 import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
+import { BoardCreatorModal } from './boardCreator';
+import { BOARD_PRESETS } from '../boards/presets';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
 type PanelTab = 'mission' | 'inspect' | 'studio';
@@ -274,6 +276,9 @@ export class PcbApp {
   async init() {
     this.scenarios = await builtinScenarios();
     await this.addDemoStubs();
+    for (const p of BOARD_PRESETS) {
+      this.scenarios.push(p.create());
+    }
     this.bundledIds = new Set(this.scenarios.map((s) => s.id));
     await this.loadMods();
     this.buildDom();
@@ -503,6 +508,7 @@ export class PcbApp {
             <button class="btn ghost lang-btn" id="btn-lang" title="${getLang() === 'pl' ? 'Zmień język na angielski (L)' : 'Switch language to Polish (L)'}">
               <span id="lang-btn-text">${getLang() === 'pl' ? '🇵🇱 PL' : '🇬🇧 EN'}</span>
             </button>
+            <button class="btn ghost icon" id="btn-creator" title="${getLang() === 'pl' ? 'Kreator płytek i baza części PCBWay/LCSC (K)' : 'Board creator & parts catalog (K)'}">${icon('grid')}</button>
             <button class="btn ghost icon" id="btn-report" title="${getLang() === 'pl' ? 'Protokół naprawy' : 'Repair report'}">${icon('report')}</button>
             <button class="btn ghost icon" id="btn-shortcuts" title="${getLang() === 'pl' ? 'Skróty klawiszowe (?)' : 'Keyboard shortcuts (?'}">${icon('keyboard')}</button>
             <button class="btn ghost icon" id="btn-sound" title="Sound"></button>
@@ -1616,6 +1622,17 @@ export class PcbApp {
       this.modalPos = [0, 0];
       this.renderModal();
     });
+    q('#btn-creator')?.addEventListener('click', () => {
+      new BoardCreatorModal({
+        onLoadScenario: (sc) => {
+          this.scenarios.push(sc);
+          this.refreshScenarioSelect();
+          this.loadScenario(sc);
+        },
+        onClose: () => {},
+        toast: (msg, kind) => this.toast(msg, kind),
+      }).show();
+    });
     q('#btn-report')?.addEventListener('click', () => {
       this.showReport = !this.showReport;
       if (this.showReport) { this.showBoards = false; this.showFeedback = false; this.showHelp = false; this.showShortcuts = false; }
@@ -2037,6 +2054,18 @@ export class PcbApp {
       this.buildDom();
       this.bindEvents();
       this.renderUI();
+      return;
+    }
+    if (k === 'k') {
+      new BoardCreatorModal({
+        onLoadScenario: (sc) => {
+          this.scenarios.push(sc);
+          this.refreshScenarioSelect();
+          this.loadScenario(sc);
+        },
+        onClose: () => {},
+        toast: (msg, kind) => this.toast(msg, kind),
+      }).show();
       return;
     }
     if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
@@ -3703,11 +3732,17 @@ export class PcbApp {
   }
 
   private renderBoardsModal() {
+    const isPl = getLang() === 'pl';
     type CatKey = 'tutorials' | 'challenges' | 'hardware' | 'mods';
     const counts: Record<CatKey, number> = { tutorials: 0, challenges: 0, hardware: 0, mods: 0 };
     for (const s of this.scenarios) counts[this.classifyScenario(s)]++;
 
-    const sections: { key: CatKey; title: string; sub: string }[] = [
+    const sections: { key: CatKey; title: string; sub: string }[] = isPl ? [
+      { key: 'tutorials', title: 'Samouczki dla początkujących', sub: 'Prowadzone krok po kroku płytki wyjaśniające podstawy elektroniki i napraw' },
+      { key: 'challenges', title: 'Wyzwania serwisowe', sub: 'Zagadki diagnostyczne i lokalizowanie usterek w układach' },
+      { key: 'hardware', title: 'Prawdziwy sprzęt & Open Source', sub: 'Pełne schematy z setkami elementów i boardview z silnikiem SPICE + PWR' },
+      { key: 'mods', title: 'Modyfikacje społeczności', sub: 'Płytki z zainstalowanych modów. Zarządzaj nimi przyciskiem Mody' },
+    ] : [
       { key: 'tutorials', title: 'Beginner Tutorials', sub: 'Guided step-by-step boards covering the core fundamentals' },
       { key: 'challenges', title: 'Repair Challenges', sub: 'Standalone fault-finding & multi-fault diagnostic puzzles' },
       { key: 'hardware', title: 'Real Hardware & Open Source', sub: 'Full multi-hundred-part schematics & boardviews on SPICE + PWR' },
@@ -3724,7 +3759,7 @@ export class PcbApp {
             .filter(({ s }) => this.classifyScenario(s) === sec.key)
             .filter(({ s }) => {
               if (!q) return true;
-              const topics = TUTORIAL_TOPICS[s.id]?.join(' ') ?? '';
+              const topics = getTutorialTopics(s.id)?.join(' ') ?? '';
               const mod = this.modBoards.get(s)?.mod.name ?? '';
               return `${s.meta.title} ${s.meta.description} ${s.meta.author} ${topics} ${mod}`.toLowerCase().includes(q);
             });
@@ -3746,7 +3781,7 @@ export class PcbApp {
                   const isSolved = this.solvedIds.has(s.id);
                   const tr = translateScenario(s.id, s.meta.title, s.meta.description);
                   const tutIdx = TUTORIAL_SCENARIO_IDS.indexOf(s.id as (typeof TUTORIAL_SCENARIO_IDS)[number]);
-                  const topics = TUTORIAL_TOPICS[s.id];
+                  const topics = getTutorialTopics(s.id);
                   const chips: string[] = [];
                   const mb = this.modBoards.get(s);
                   if (mb) {
@@ -3830,8 +3865,9 @@ export class PcbApp {
               <span class="badge info">${this.solvedIds.size} / ${this.scenarios.length} solved</span>
             </div>
             <div class="row">
-              <button class="btn sm" id="cat-new">${icon('plus', 13)}<span>Blank board</span></button>
-              <button class="btn sm" id="cat-import">${icon('upload', 13)}<span>Import</span></button>
+              <button class="btn sm" id="cat-creator" style="color:var(--accent);border-color:var(--accent);" title="${isPl ? 'Twórz własne płytki i dobieraj części PCBWay/LCSC' : 'Create custom boards and pick PCBWay/LCSC parts'}">${icon('grid', 13)}<span>${isPl ? 'Kreator Płytek' : 'Board Creator'}</span></button>
+              <button class="btn sm" id="cat-new">${icon('plus', 13)}<span>${isPl ? 'Pusta płytka' : 'Blank board'}</span></button>
+              <button class="btn sm" id="cat-import">${icon('upload', 13)}<span>${isPl ? 'Importuj' : 'Import'}</span></button>
               <button class="btn sm" id="cat-mods" title="Install, remove and make mods">${icon('box', 13)}<span>Mods${this.modResult.failed.length ? ' ⚠' : ''}</span></button>
               <button class="btn ghost icon sm" id="modal-close" title="Close (Esc)">${icon('x', 14)}</button>
             </div>
@@ -3869,6 +3905,18 @@ export class PcbApp {
         return;
       }
       if ((e.target as HTMLElement).id === 'modal-close-bg') closeModal();
+    });
+    this.modalRootEl.querySelector('#cat-creator')?.addEventListener('click', () => {
+      closeModal();
+      new BoardCreatorModal({
+        onLoadScenario: (sc) => {
+          this.scenarios.push(sc);
+          this.refreshScenarioSelect();
+          this.loadScenario(sc);
+        },
+        onClose: () => {},
+        toast: (msg, kind) => this.toast(msg, kind),
+      }).show();
     });
     this.modalRootEl.querySelector('#cat-new')?.addEventListener('click', () => this.createBlankBoard());
     this.modalRootEl.querySelector('#cat-mods')?.addEventListener('click', () => {
@@ -4085,7 +4133,7 @@ export class PcbApp {
                 : 'Each scenario provides a simulated circuit board solved via fast DC nodal analysis or a full SPICE engine (selectable in the top bar; export any board as an ngspice <code>.cir</code> netlist), rendered in 2D/3D WebGPU. Diagnose electrical faults, perform rework, and execute <b>Run tests</b> to verify repairs and decrypt the CTF flag.'}
             </p>
           </div>
-          ${BEGINNER_PRIMER_HTML}
+          ${getBeginnerPrimerHtml()}
           <div class="card">
             <div class="card-title">${isPl ? 'Zasady diagnozy usterek' : 'Fault diagnosis'}</div>
             <ul>
@@ -4181,6 +4229,7 @@ export class PcbApp {
                 <div class="sc-row"><span>${isPl ? 'Cofnij ruch' : 'Undo'}</span><span class="sc-kbd">⌘Z / Ctrl+Z</span></div>
                 <div class="sc-row"><span>${isPl ? 'Ponów ruch' : 'Redo'}</span><span class="sc-kbd">⇧⌘Z / Ctrl+Y</span></div>
                 <div class="sc-row"><span>${isPl ? 'Przełącz język (PL/EN)' : 'Toggle Language'}</span><span class="sc-kbd">L</span></div>
+                <div class="sc-row"><span>${isPl ? 'Kreator płytek i baza części' : 'Board creator &amp; parts'}</span><span class="sc-kbd">K</span></div>
                 <div class="sc-row"><span>${isPl ? 'Okienko skrótów' : 'Shortcuts modal'}</span><span class="sc-kbd">?</span></div>
                 <div class="sc-row"><span>${isPl ? 'Zamknij okno' : 'Close window'}</span><span class="sc-kbd">Esc</span></div>
               </div>

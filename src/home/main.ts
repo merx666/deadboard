@@ -6,6 +6,7 @@ import { markSvg } from '../ui/logo';
 import { icon } from '../ui/icons';
 import { getLang, setLang, onLangChange, type Lang } from '../i18n';
 import { LANDING_PL, LANDING_EN } from './translations';
+import { Hero3DViewer } from './hero3d';
 
 // Share links made before the homepage existed pointed at "/#s=…": hand them to the app.
 if (location.hash.startsWith('#s=')) location.replace(`./app.html${location.hash}`);
@@ -79,8 +80,33 @@ function renderLandingText(lang: Lang) {
   const heroReq = document.querySelector<HTMLElement>('.hero .req');
   if (heroReq) heroReq.textContent = dict.hero.req;
 
-  const figcaption = document.querySelector<HTMLElement>('.hero-shot figcaption');
-  if (figcaption) figcaption.textContent = dict.hero.caption;
+  const figcaption = document.querySelector<HTMLElement>('#hero-figcaption');
+  if (figcaption) {
+    figcaption.textContent = lang === 'pl'
+      ? 'Interaktywny model 3D otwartej płytki drukowanej: swobodny obrót w 3D, inspekcja ścieżek, padów i elementów SMD/THT przed przystąpieniem do naprawy.'
+      : 'Interactive 3D open-hardware circuit board: free 360° orbit, inspect traces, pads, and SMD/THT components before repair.';
+  }
+
+  const frameTitle = document.querySelector<HTMLElement>('#hero-frame-title');
+  if (frameTitle) {
+    frameTitle.textContent = lang === 'pl' ? 'deadboard — interaktywny stół 3D' : 'deadboard — 3D interactive bench';
+  }
+
+  const hintText = document.querySelector<HTMLElement>('#hero-3d-hint-text');
+  if (hintText) {
+    hintText.textContent = lang === 'pl'
+      ? '🖱️ Przeciągnij myszą lub palcem, aby obracać płytkę 360° · Kółko myszy: zoom'
+      : '🖱️ Drag with mouse or finger to orbit 360° · Mouse wheel: zoom';
+  }
+
+  const btnTop = document.querySelector<HTMLButtonElement>('#hero-btn-top');
+  if (btnTop) btnTop.textContent = lang === 'pl' ? 'Góra (Top)' : 'Top';
+
+  const btnBottom = document.querySelector<HTMLButtonElement>('#hero-btn-bottom');
+  if (btnBottom) btnBottom.textContent = lang === 'pl' ? 'Spód (Bottom)' : 'Bottom';
+
+  const btnReset = document.querySelector<HTMLButtonElement>('#hero-btn-reset');
+  if (btnReset) btnReset.textContent = lang === 'pl' ? 'Reset' : 'Reset';
 
   // Bootlog note
   const termNote = document.querySelector<HTMLElement>('.bootlog .term-note');
@@ -209,6 +235,46 @@ if (log && !reduce && 'IntersectionObserver' in window) {
     next();
   }, { threshold: 0.4 });
   io.observe(log);
+}
+
+// Initialize 3D Interactive Hero Viewer
+const heroCanvas = document.querySelector<HTMLCanvasElement>('#hero-3d-canvas');
+let heroViewer: Hero3DViewer | null = null;
+if (heroCanvas) {
+  heroViewer = new Hero3DViewer(heroCanvas);
+  void heroViewer.init();
+
+  const btnOrbit = document.querySelector<HTMLButtonElement>('#hero-btn-orbit');
+  btnOrbit?.addEventListener('click', () => {
+    if (!heroViewer) return;
+    const active = heroViewer.toggleAutoOrbit();
+    btnOrbit.classList.toggle('active', active);
+  });
+
+  const btnTop = document.querySelector<HTMLButtonElement>('#hero-btn-top');
+  btnTop?.addEventListener('click', () => {
+    heroViewer?.setSide('F');
+    btnOrbit?.classList.remove('active');
+  });
+
+  const btnBottom = document.querySelector<HTMLButtonElement>('#hero-btn-bottom');
+  btnBottom?.addEventListener('click', () => {
+    heroViewer?.setSide('B');
+    btnOrbit?.classList.remove('active');
+  });
+
+  const btnReset = document.querySelector<HTMLButtonElement>('#hero-btn-reset');
+  btnReset?.addEventListener('click', () => {
+    heroViewer?.resetCamera();
+    btnOrbit?.classList.add('active');
+  });
+
+  const selectBoard = document.querySelector<HTMLSelectElement>('#hero-board-select');
+  selectBoard?.addEventListener('change', () => {
+    if (heroViewer && selectBoard.value) {
+      void heroViewer.loadDemoBoard(selectBoard.value);
+    }
+  });
 }
 
 // Initial render in default language (PL)

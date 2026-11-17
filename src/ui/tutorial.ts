@@ -1,6 +1,8 @@
 import type { Board, Side, V2 } from '../types';
 import type { Conn } from '../connectivity';
 import type { VizMode } from '../render/webgpu';
+import { getLang } from '../i18n';
+import { TUTORIAL_STEPS_PL, TUTORIAL_TOPICS_PL, BEGINNER_PRIMER_HTML_PL } from '../i18n/tutorials';
 
 export interface TutorialCheckState {
   scenarioId: string;
@@ -419,8 +421,36 @@ export function isTutorialScenario(scenarioId: string): boolean {
   return Object.prototype.hasOwnProperty.call(TUTORIALS_BY_SCENARIO, scenarioId);
 }
 
-export function getTutorialSteps(scenarioId: string): TutorialStep[] | null {
-  return TUTORIALS_BY_SCENARIO[scenarioId] ?? null;
+export function getTutorialSteps(scenarioId: string, lang = getLang()): TutorialStep[] | null {
+  const steps = TUTORIALS_BY_SCENARIO[scenarioId];
+  if (!steps) return null;
+  if (lang !== 'pl') return steps;
+  const plTexts = TUTORIAL_STEPS_PL[scenarioId];
+  if (!plTexts) return steps;
+  return steps.map((s, i) => {
+    const pl = plTexts[i];
+    if (!pl) return s;
+    return {
+      ...s,
+      title: pl.title,
+      concept: pl.concept,
+      task: pl.task,
+      phone: pl.phone ?? s.phone,
+      quickAction: s.quickAction ? { ...s.quickAction, label: pl.quickActionLabel ?? s.quickAction.label } : undefined,
+      target: s.target ? { ...s.target, label: pl.targetLabel ?? s.target.label } : null,
+    };
+  });
+}
+
+export function getTutorialTopics(scenarioId: string, lang = getLang()): string[] | undefined {
+  if (lang === 'pl' && TUTORIAL_TOPICS_PL[scenarioId]) {
+    return TUTORIAL_TOPICS_PL[scenarioId];
+  }
+  return TUTORIAL_TOPICS[scenarioId];
+}
+
+export function getBeginnerPrimerHtml(lang = getLang()): string {
+  return lang === 'pl' ? BEGINNER_PRIMER_HTML_PL : BEGINNER_PRIMER_HTML;
 }
 
 export function nextTutorialScenarioId(scenarioId: string): string | null {

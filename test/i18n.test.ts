@@ -46,4 +46,45 @@ for (const id of toolIds) {
   assert(pl.tools[id].tip.length > 0, `Empty PL tip for ${id}`);
 }
 
-console.log('i18n: Polish (default) and English translations, scenario lookups, and language switching — ok');
+// Tutorial translations validation
+const { getTutorialSteps, getTutorialTopics, getBeginnerPrimerHtml } = await import('../src/ui/tutorial');
+setLang('pl');
+const tutPl = getTutorialSteps('builtin-first-light');
+assert(tutPl && tutPl.length > 0, 'Tutorial steps in Polish must exist');
+assert(tutPl[0].title === 'Anatomia płytki drukowanej (PCB)', `First tutorial step title in Polish: "${tutPl[0].title}"`);
+assert(tutPl[0].concept.includes('Płytka PCB zastępuje luźne przewody'), 'Concept translated in Polish');
+assert(getBeginnerPrimerHtml().includes('Podstawy diagnostyki PCB'), 'Beginner primer HTML in Polish');
+assert(getTutorialTopics('builtin-first-light')?.[0] === 'Ścieżki i Pady', 'Topics in Polish');
+
+setLang('en');
+const tutEn = getTutorialSteps('builtin-first-light');
+assert(tutEn && tutEn.length > 0, 'Tutorial steps in English must exist');
+assert(tutEn[0].title === 'Anatomy of a PCB', `First tutorial step title in English: "${tutEn[0].title}"`);
+assert(getBeginnerPrimerHtml().includes('PCB basics (start here)'), 'Beginner primer HTML in English');
+assert(getTutorialTopics('builtin-first-light')?.[0] === 'Traces & Pads', 'Topics in English');
+setLang('pl');
+
+// Supplier parts catalog validation
+const { SUPPLIER_PARTS, searchSupplierParts } = await import('../src/parts/catalog');
+assert(SUPPLIER_PARTS.length >= 15, 'Supplier parts catalog must contain at least 15 components');
+const espPart = searchSupplierParts('ESP32');
+assert(espPart.length > 0 && espPart[0].lcsc.length > 0, 'ESP32 component found in catalog with LCSC code');
+const picoPart = searchSupplierParts('RP2040');
+assert(picoPart.length > 0, 'Raspberry Pi Pico (RP2040) found in catalog');
+const arduinoPart = searchSupplierParts('ATmega328P');
+assert(arduinoPart.length > 0, 'Arduino ATmega328P found in catalog');
+const amsPart = searchSupplierParts('AMS1117');
+assert(amsPart.length > 0 && amsPart[0].pkg === 'SOT-223', 'AMS1117 LDO found with SOT-223 package');
+
+// Board presets validation
+const { BOARD_PRESETS } = await import('../src/boards/presets');
+assert(BOARD_PRESETS.length >= 4, 'Must have at least 4 board presets');
+for (const preset of BOARD_PRESETS) {
+  const sc = preset.create();
+  assert(sc.board.components.length > 0, `Preset ${preset.id} must have components`);
+  assert(sc.board.traces.length > 0, `Preset ${preset.id} must have copper traces`);
+  assert(sc.objectives.length > 0, `Preset ${preset.id} must have objectives`);
+  assert(sc.meta.title.length > 0, `Preset ${preset.id} must have title`);
+}
+
+console.log('i18n: Polish (default) and English translations, scenario lookups, tutorials, supplier catalog, and board presets — ok');
