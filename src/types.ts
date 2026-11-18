@@ -169,3 +169,7 @@ export interface Scenario {
   /** Model calibration from bench measurements of a real board (see src/calibrate.ts). */
   calibration?: { loadScale?: number; source?: string };
 }
+
+export * from './types/units';
+export * from './types/components';
+
