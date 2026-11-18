@@ -1,5 +1,6 @@
 // Supplier parts database: PCBWay / LCSC / DigiKey / Mouser component library
 // Comprehensive database of microcontrollers, power regulators, transistors, diodes, and ICs.
+import type { Board } from '../types';
 
 export interface ComponentPart {
   id: string;
@@ -123,6 +124,58 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     footprintHeight: 51.0,
     padsCount: 40,
     tags: ['mcu', 'arm', 'cortex-m0', 'raspberry', 'rpi', 'pico', 'rp2040', 'dual-core', 'pio', '3.3v', '3v3', '5v', 'dip', 'dip-40', 'tht', 'castellated', 'module', 'modul', 'mikrokontroler', 'plytka']
+  },
+  {
+    id: 'rp2040',
+    mpn: 'RP2040',
+    manufacturer: 'Raspberry Pi',
+    lcsc: 'C2040',
+    pcbwayPart: 'PCBWAY-RP2040',
+    namePl: 'Mikrokontroler RP2040 Dual ARM Cortex-M0+ QFN-56',
+    nameEn: 'Raspberry Pi RP2040 Dual ARM Cortex-M0+ MCU QFN-56',
+    category: 'modules',
+    pkg: 'QFN-56',
+    voltage: '3.3V',
+    current: 'Typ. 20-50 mA, Max 100 mA',
+    descPl: 'Dwurdzeniowy mikrokontroler ARM Cortex-M0+ @ 133MHz, 264KB SRAM, unikalne programowalne bloki we/wy PIO, wbudowane USB 1.1 i interfejs pamięci QSPI Flash.',
+    descEn: 'Raspberry Pi RP2040 dual-core ARM Cortex-M0+ microcontroller with 264KB SRAM, Programmable I/O (PIO), USB 1.1 controller, and QSPI Flash interface in compact QFN-56.',
+    pins: {
+      '1': 'IO0', '2': 'IO1', '3': 'IO2', '4': 'IO3', '5': 'IO4', '6': 'IO5', '7': 'IO6', '8': 'IO7',
+      '9': 'VDD_IO', '10': 'IO8', '11': 'IO9', '12': 'IO10', '13': 'IO11', '14': 'IO12', '15': 'IO13',
+      '16': 'IO14', '17': 'IO15', '18': 'TESTEN', '19': 'VDD_CORE', '20': 'XIN', '21': 'XOUT', '22': 'IO16',
+      '23': 'IO17', '24': 'IO18', '25': 'IO19', '26': 'IO20', '27': 'IO21', '28': 'IO22', '29': 'IO23',
+      '30': 'IO24', '31': 'IO25', '32': 'USB_DM', '33': 'USB_DP', '34': 'USB_VDD', '35': 'IO26_ADC0',
+      '36': 'IO27_ADC1', '37': 'IO28_ADC2', '38': 'IO29_ADC3', '39': 'ADC_AVDD', '40': 'VREFN', '41': 'VREFP',
+      '42': 'VREG_VIN', '43': 'VREG_VOUT', '44': 'VDD_CORE', '45': 'VDD_IO', '46': 'QSPI_SD3', '47': 'QSPI_SCLK',
+      '48': 'QSPI_SD0', '49': 'QSPI_SD2', '50': 'QSPI_SD1', '51': 'QSPI_SS_N', '52': 'VDD_CORE', '53': 'RUN',
+      '54': 'SWCLK', '55': 'SWDIO', '56': 'VDD_CORE', '57': 'GND'
+    },
+    valKind: 'IC',
+    footprintWidth: 7.0,
+    footprintHeight: 7.0,
+    padsCount: 57,
+    tags: ['mcu', 'arm', 'cortex-m0', 'raspberry', 'rpi', 'rp2040', 'qfn', 'qfn-56', 'qfn56', 'dual-core', 'pio', '3.3v', '3v3', 'smd', 'module', 'modul', 'mikrokontroler', 'ic']
+  },
+  {
+    id: 'bme280',
+    mpn: 'BME280',
+    manufacturer: 'Bosch Sensortec',
+    lcsc: 'C92489',
+    pcbwayPart: 'PCBWAY-BME280',
+    namePl: 'Cyfrowy sensor temperatury, wilgotności i ciśnienia BME280 LGA-8',
+    nameEn: 'Bosch BME280 Temperature, Humidity & Pressure Sensor LGA-8',
+    category: 'modules',
+    pkg: 'LGA-8',
+    voltage: '1.8-3.6V',
+    current: 'Pomiar: 3.6 µA, Standby: 0.2 µA, Sleep: 0.1 µA',
+    descPl: 'Wysokiej precyzji cyfrowy czujnik środowiskowy mierzący temperaturę, wilgotność względną oraz ciśnienie barometryczne. Interfejsy cyfrowe I2C oraz SPI w miniaturowej obudowie LGA-8.',
+    descEn: 'Bosch Sensortec BME280 combined digital humidity, pressure and temperature sensor. Ultra-compact LGA-8 package with I2C/SPI digital interfaces.',
+    pins: { '1': 'GND', '2': 'CSB', '3': 'SDI', '4': 'SCK', '5': 'SDO', '6': 'VDDIO', '7': 'GND', '8': 'VDD' },
+    valKind: 'IC',
+    footprintWidth: 2.5,
+    footprintHeight: 2.5,
+    padsCount: 8,
+    tags: ['sensor', 'czujnik', 'bme280', 'bosch', 'temperature', 'humidity', 'pressure', 'barometer', 'i2c', 'spi', 'lga-8', 'lga8', 'smd', 'iot', 'weather', '3.3v', '1.8v', 'module', 'modul', 'ic']
   },
   {
     id: 'rpi-zero-2w',
@@ -370,6 +423,33 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     padsCount: 9,
     tags: ['charger', 'battery', 'li-ion', 'lipo', 'li-po', '4056', 'tp4056', 'ladowarka', 'ładowarka', 'ladowanie', 'ładowanie', 'akumulator', 'bateria', 'power', 'zasilanie', 'sop-8', 'smd', 'cc-cv', 'ic']
   },
+  {
+    id: 'drv8825',
+    mpn: 'DRV8825',
+    manufacturer: 'Texas Instruments',
+    lcsc: 'C39243',
+    pcbwayPart: 'PCBWAY-DRV8825',
+    namePl: 'Sterownik silnika krokowego DRV8825 2.5A z mikrokrokiem 1/32 HTSSOP-28',
+    nameEn: 'TI DRV8825 2.5A Stepper Motor Driver with 1/32 Microstepping HTSSOP-28',
+    category: 'power',
+    pkg: 'HTSSOP-28',
+    voltage: '8.2-45V',
+    current: 'Do 2.5A szczytowo na fazę (1.75A RMS)',
+    descPl: 'Zintegrowany bipolarny sterownik silnika krokowego z wbudowanym przetwornikiem mikrokroków (do 1/32) oraz zabezpieczeniami nadprądowymi i termicznymi. Napięcie silnika od 8.2V do 45V, wyjście do 2.5A.',
+    descEn: 'Integrated bipolar stepper motor driver with built-in indexer microstepping down to 1/32-step. Wide 8.2V to 45V motor supply range and up to 2.5A peak drive current.',
+    pins: {
+      '1': 'CP1', '2': 'CP2', '3': 'VCP', '4': 'VMA', '5': 'AOUT1', '6': 'ISENA', '7': 'AOUT2',
+      '8': 'BOUT2', '9': 'ISENB', '10': 'BOUT1', '11': 'VMB', '12': 'AVDD', '13': 'GND', '14': 'V3P3OUT',
+      '15': 'RESET#', '16': 'SLEEP#', '17': 'FAULT#', '18': 'HOMEn', '19': 'MODE0', '20': 'MODE1',
+      '21': 'MODE2', '22': 'STEP', '23': 'ENABLE#', '24': 'DIR', '25': 'DECAY', '26': 'VREF',
+      '27': 'GND', '28': 'GND', '29': 'PowerPAD_GND'
+    },
+    valKind: 'IC',
+    footprintWidth: 6.4,
+    footprintHeight: 9.7,
+    padsCount: 29,
+    tags: ['stepper', 'motor', 'driver', 'drv8825', 'ti', 'texas-instruments', 'htssop-28', 'htssop28', 'power', 'silnik', 'krokowy', 'sterownik', 'smd', 'ic', 'microstepping', 'cnc', '3d-printer']
+  },
 
   // --- Transistors & MOSFETs ---
   {
@@ -479,28 +559,49 @@ export const SUPPLIER_PARTS: ComponentPart[] = [
     padsCount: 6,
     tags: ['diode', 'tvs', 'esd', 'protection', 'usb', 'stmicroelectronics', 'sot-23-6', 'sot23', 'smd', 'dioda', 'zabezpieczenie', 'ochrona']
   },
+  {
+    id: 'ws2812b',
+    mpn: 'WS2812B',
+    manufacturer: 'Worldsemi',
+    lcsc: 'C114586',
+    pcbwayPart: 'PCBWAY-WS2812B-5050',
+    namePl: 'Inteligentna cyfrowa dioda LED RGB WS2812B SMD-5050',
+    nameEn: 'Worldsemi WS2812B Addressable RGB LED 5050',
+    category: 'diodes',
+    pkg: 'SMD-5050',
+    voltage: '5V',
+    current: 'Max 60 mA (20 mA na kanał RGB), Standby: 1 mA',
+    descPl: 'Cyfrowa, inteligentna dioda LED RGB 5050 z wbudowanym układem sterującym i protokołem 1-Wire (NeoPixel). Każdy piksel ma 256 poziomów jasności (16.7 mln barw).',
+    descEn: 'Worldsemi WS2812B intelligent control LED light source with integrated RGB chip and driver in 5050 package. Single-wire cascade transmission (NeoPixel compatible).',
+    pins: { '1': 'VDD', '2': 'DOUT', '3': 'VSS', '4': 'DIN' },
+    valKind: 'D',
+    footprintWidth: 5.0,
+    footprintHeight: 5.0,
+    padsCount: 4,
+    tags: ['led', 'rgb', 'ws2812', 'ws2812b', 'neopixel', 'addressable', 'worldsemi', '5050', 'smd-5050', 'smd', 'diode', 'dioda', 'pwm', '5v', 'digital']
+  },
 
   // --- Interface & Support ICs / Connectors ---
   {
     id: 'ch340c',
     mpn: 'CH340C',
-    manufacturer: 'WCH (Jiangsu Qinheng)',
-    lcsc: 'C85422',
+    manufacturer: 'WCH',
+    lcsc: 'C85023',
     pcbwayPart: 'PCBWAY-CH340C',
-    namePl: 'Konwerter USB na UART z wbudowanym oscylatorem kwarcowym',
-    nameEn: 'USB to Serial UART Bridge with Built-in Crystal',
+    namePl: 'Konwerter USB na UART z wbudowanym oscylatorem kwarcowym CH340C',
+    nameEn: 'WCH CH340C USB to UART Converter with Internal Clock',
     category: 'interface',
     pkg: 'SOP-16',
-    voltage: '3.3V – 5.0V',
-    current: 'Typ. 12 mA',
-    descPl: 'Ekonomiczny mostek USB-UART stosowany w programatorach ESP32, Arduino Nano i klonach STM32. Wbudowany rezonator eliminuje konieczność kwarcu 12MHz.',
-    descEn: 'Cost-effective USB to UART chip used on ESP32 development boards and Arduino clones. Built-in crystal clock.',
-    pins: { '1': 'GND', '2': 'TXD', '3': 'RXD', '4': 'V3', '5': 'UD+', '6': 'UD-', '16': 'VCC' },
+    voltage: '5V/3.3V',
+    current: 'Typ. 12 mA, Sleep: 0.15 mA',
+    descPl: 'Ekonomiczny mostek USB-UART z wbudowanym oscylatorem kwarcowym eliminującym potrzebę zewnętrznego kwarcu 12MHz. Pełna obsługa prędkości od 50bps do 2Mbps, poziomy logiczne 5V/3.3V.',
+    descEn: 'WCH CH340C USB-to-UART bridge converter with integrated clock generator (no external crystal required). Supports 50bps to 2Mbps baud rates, 5V and 3.3V operation.',
+    pins: { '1': 'GND', '2': 'TXD', '3': 'RXD', '4': 'V3', '5': 'UD+', '6': 'UD-', '7': 'NC', '8': 'NC', '9': 'CTS#', '10': 'DSR#', '11': 'RI#', '12': 'DCD#', '13': 'DTR#', '14': 'RTS#', '15': 'NC', '16': 'VCC' },
     valKind: 'IC',
     footprintWidth: 6.0,
     footprintHeight: 10.0,
     padsCount: 16,
-    tags: ['usb', 'uart', 'serial', 'bridge', 'converter', 'crystal', 'wch', 'ch340', 'ch340c', 'sop-16', 'smd', 'interface', 'interfejs', 'szeregowy']
+    tags: ['usb', 'uart', 'serial', 'bridge', 'converter', 'crystal', 'wch', 'ch340', 'ch340c', 'sop-16', 'smd', 'interface', 'interfejs', 'szeregowy', '5v', '3.3v', '3v3']
   },
   {
     id: 'ch340g',
@@ -1134,4 +1235,184 @@ export function searchSupplierParts(query: string, category?: string, tag?: stri
   }
 
   return matched.map((r) => r.part);
+}
+
+// ==========================================
+// BILL OF MATERIALS (BOM) PRODUCTION EXPORTS
+// ==========================================
+
+export interface BomItem {
+  comment?: string;
+  designator: string;
+  quantity: number;
+  footprint: string;
+  lcsc: string;
+  mpn: string;
+  description: string;
+  // JLCPCB SMT / PCBWay assembly column aliases
+  'Comment/Designator': string;
+  'Quantity': number;
+  'Footprint/Package': string;
+  'LCSC Part #': string;
+  'MPN': string;
+  'Description': string;
+}
+
+function formatBomOhms(v: number): string {
+  if (v >= 1e6) {
+    const val = v / 1e6;
+    return (val % 1 === 0 ? val.toString() : val.toFixed(1)) + 'M';
+  }
+  if (v >= 1e3) {
+    const val = v / 1e3;
+    return (val % 1 === 0 ? val.toString() : val.toFixed(1)) + 'k';
+  }
+  return (v % 1 === 0 ? v.toString() : v.toFixed(1)) + 'R';
+}
+
+function formatBomFarads(v: number): string {
+  const round = (n: number) => {
+    const s = n.toFixed(1);
+    return s.endsWith('.0') ? s.slice(0, -2) : s;
+  };
+  if (v >= 1e-3) return round(v * 1e3) + 'mF';
+  if (v >= 1e-6) return round(v * 1e6) + 'uF';
+  if (v >= 1e-9) return round(v * 1e9) + 'nF';
+  if (v >= 1e-12) return round(v * 1e12) + 'pF';
+  return v + 'F';
+}
+
+function escapeBomCsv(val: string | number | undefined | null): string {
+  if (val === undefined || val === null) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Generates aggregated Bill of Materials items grouped by component type,
+ * package, and manufacturer part number for SMT assembly.
+ */
+export function generateBomItems(board: Board): BomItem[] {
+  if (!board || !board.components || board.components.length === 0) {
+    return [];
+  }
+
+  const groups = new Map<string, {
+    refs: string[];
+    footprint: string;
+    lcsc: string;
+    mpn: string;
+    description: string;
+    comment: string;
+  }>();
+
+  for (const c of board.components) {
+    let part: ComponentPart | undefined;
+    if (c.id) part = findPartById(c.id);
+    if (!part && (c as any).partId) part = findPartById((c as any).partId);
+    if (!part && c.label) part = findPartById(c.label) ?? searchSupplierParts(c.label)[0];
+    if (!part && c.ref) part = findPartById(c.ref);
+
+    let valStr = '';
+    if (c.kind === 'resistor') valStr = formatBomOhms(c.value);
+    else if (c.kind === 'capacitor') valStr = formatBomFarads(c.value);
+    else if (c.kind === 'led') valStr = (c.color ? c.color.toUpperCase() + ' ' : '') + 'LED';
+    else if (c.kind === 'battery') valStr = `${c.value}V`;
+    else valStr = c.label || c.kind;
+
+    if (!part) {
+      if (c.kind === 'resistor') {
+        part = searchSupplierParts(valStr, 'passives')[0];
+      } else if (c.kind === 'capacitor') {
+        part = searchSupplierParts(valStr, 'passives')[0];
+      } else if (c.kind === 'led' || c.kind === 'diode') {
+        part = searchSupplierParts(c.label || c.color || c.kind, 'diodes')[0];
+      } else if (c.kind === 'ic' && c.label) {
+        part = searchSupplierParts(c.label)[0];
+      }
+    }
+
+    const pkg = c.footprint || part?.pkg || (c.body?.shape === 'chip' ? 'SOIC-8' : (c.kind === 'resistor' || c.kind === 'capacitor') ? '0805' : 'SMD');
+    const mpn = part?.mpn ?? (
+      c.kind === 'resistor' ? `RC0805JR-${valStr || '10k'}` :
+      c.kind === 'capacitor' ? `CL21B-${valStr || '100nF'}` :
+      c.kind === 'led' ? '19-217-BHC-AP1Q2-3T' :
+      c.label || `${c.kind.toUpperCase()}-SMD`
+    );
+    const lcsc = part?.lcsc ?? '';
+    const desc = part?.nameEn ?? part?.descEn ?? (c.label || `${c.kind} ${valStr}`.trim());
+    const comment = c.label || valStr || mpn;
+
+    const groupKey = [mpn, lcsc, pkg, desc].join('::');
+    const existing = groups.get(groupKey);
+    if (existing) {
+      existing.refs.push(c.ref);
+    } else {
+      groups.set(groupKey, {
+        refs: [c.ref],
+        footprint: pkg,
+        lcsc,
+        mpn,
+        description: desc,
+        comment,
+      });
+    }
+  }
+
+  const items: BomItem[] = [];
+  for (const entry of groups.values()) {
+    entry.refs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const designatorStr = entry.refs.join(', ');
+    const count = entry.refs.length;
+    items.push({
+      comment: entry.comment,
+      designator: designatorStr,
+      quantity: count,
+      footprint: entry.footprint,
+      lcsc: entry.lcsc,
+      mpn: entry.mpn,
+      description: entry.description,
+      'Comment/Designator': designatorStr,
+      'Quantity': count,
+      'Footprint/Package': entry.footprint,
+      'LCSC Part #': entry.lcsc,
+      'MPN': entry.mpn,
+      'Description': entry.description,
+    });
+  }
+
+  items.sort((a, b) => a.designator.localeCompare(b.designator, undefined, { numeric: true }));
+  return items;
+}
+
+/**
+ * Exports production-ready Bill of Materials (BOM) in CSV format
+ * formatted for JLCPCB SMT / PCBWay assembly.
+ */
+export function exportBomCsv(board: Board): string {
+  const items = generateBomItems(board);
+  const header = 'Comment/Designator,Quantity,Footprint/Package,LCSC Part #,MPN,Description';
+  const rows: string[] = [header];
+  for (const item of items) {
+    rows.push([
+      escapeBomCsv(item.designator),
+      item.quantity,
+      escapeBomCsv(item.footprint),
+      escapeBomCsv(item.lcsc),
+      escapeBomCsv(item.mpn),
+      escapeBomCsv(item.description),
+    ].join(','));
+  }
+  return rows.join('\n');
+}
+
+/**
+ * Exports production-ready Bill of Materials (BOM) in JSON format.
+ */
+export function exportBomJson(board: Board): string {
+  const items = generateBomItems(board);
+  return JSON.stringify(items, null, 2);
 }

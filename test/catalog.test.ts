@@ -4,8 +4,12 @@ import {
   findPartById,
   searchSupplierParts,
   stripDiacritics,
-  normalizeSearchTerm
+  normalizeSearchTerm,
+  exportBomCsv,
+  exportBomJson,
+  type BomItem
 } from '../src/parts/catalog';
+import type { Board } from '../src/types';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -93,7 +97,7 @@ assert(findPartById('non-existent-part-id-xyz') === undefined, 'findPartById ret
   assert(espPunct.length >= 3, 'Search "esp-32" resolves ESP32 parts despite hyphen');
 
   const rpPunct = searchSupplierParts('rp-2040');
-  assert(rpPunct.length >= 1 && rpPunct[0].id === 'rp2040-pico', 'Search "rp-2040" resolves RP2040 despite hyphen');
+  assert(rpPunct.length >= 1 && (rpPunct[0].id === 'rp2040' || rpPunct[0].id === 'rp2040-pico'), 'Search "rp-2040" resolves RP2040 despite hyphen');
 
   const amsPunct = searchSupplierParts('ams-1117');
   assert(amsPunct.length >= 2, 'Search "ams-1117" resolves AMS1117-3.3 and AMS1117-5.0 despite hyphen');
@@ -334,6 +338,228 @@ assert(findPartById('non-existent-part-id-xyz') === undefined, 'findPartById ret
   const usbc = findPartById('usb-c-16p-tht-smd');
   assert(usbc && usbc.mpn === 'TYPE-C-31-M-12' && usbc.lcsc === 'C165948', 'USB-C receptacle present with LCSC C165948');
   assert(searchSupplierParts('type-c receptacle').some((p) => p.id === 'usb-c-16p-tht-smd'), 'Found via "type-c receptacle"');
+}
+
+// 12. Verification of 5 new popular maker/IoT parts: rp2040, ws2812b, bme280, ch340c, drv8825
+{
+  // 1. Raspberry Pi RP2040 (QFN-56, LCSC C2040, 3.3V)
+  const rp2040 = findPartById('rp2040');
+  assert(rp2040 !== undefined, 'RP2040 part must exist');
+  assert(rp2040.mpn === 'RP2040', 'RP2040 MPN matches');
+  assert(rp2040.manufacturer === 'Raspberry Pi', 'RP2040 manufacturer is Raspberry Pi');
+  assert(rp2040.lcsc === 'C2040', 'RP2040 LCSC is C2040');
+  assert(rp2040.category === 'modules', 'RP2040 category is modules');
+  assert(rp2040.pkg.includes('QFN-56'), 'RP2040 package is QFN-56');
+  assert(rp2040.voltage === '3.3V', 'RP2040 voltage is 3.3V');
+  assert(rp2040.padsCount === 57, 'RP2040 has 57 pads (56 perimeter + thermal GND pad)');
+  assert(rp2040.footprintWidth === 7.0 && rp2040.footprintHeight === 7.0, 'RP2040 is 7x7mm QFN');
+  assert(searchSupplierParts('qfn-56').some((p) => p.id === 'rp2040'), 'Search "qfn-56" finds RP2040');
+
+  // 2. Worldsemi WS2812B (SMD-5050, LCSC C114586, 5V)
+  const ws2812b = findPartById('ws2812b');
+  assert(ws2812b !== undefined, 'WS2812B part must exist');
+  assert(ws2812b.mpn === 'WS2812B', 'WS2812B MPN matches');
+  assert(ws2812b.manufacturer === 'Worldsemi', 'WS2812B manufacturer is Worldsemi');
+  assert(ws2812b.lcsc === 'C114586', 'WS2812B LCSC is C114586');
+  assert(ws2812b.category === 'diodes', 'WS2812B category is diodes');
+  assert(ws2812b.pkg.includes('5050'), 'WS2812B package is SMD-5050');
+  assert(ws2812b.voltage === '5V', 'WS2812B voltage is 5V');
+  assert(ws2812b.padsCount === 4, 'WS2812B has 4 pads (VDD, DOUT, VSS, DIN)');
+  assert(searchSupplierParts('neopixel').some((p) => p.id === 'ws2812b'), 'Search "neopixel" finds WS2812B');
+  assert(searchSupplierParts('ws2812').some((p) => p.id === 'ws2812b'), 'Search "ws2812" finds WS2812B');
+
+  // 3. Bosch BME280 (LGA-8, LCSC C92489, 1.8-3.6V)
+  const bme280 = findPartById('bme280');
+  assert(bme280 !== undefined, 'BME280 part must exist');
+  assert(bme280.mpn === 'BME280', 'BME280 MPN matches');
+  assert(bme280.manufacturer === 'Bosch Sensortec', 'BME280 manufacturer is Bosch Sensortec');
+  assert(bme280.lcsc === 'C92489', 'BME280 LCSC is C92489');
+  assert(bme280.category === 'modules', 'BME280 category is modules');
+  assert(bme280.pkg.includes('LGA-8'), 'BME280 package is LGA-8');
+  assert(bme280.voltage === '1.8-3.6V', 'BME280 voltage is 1.8-3.6V');
+  assert(bme280.padsCount === 8, 'BME280 has 8 pads');
+  assert(searchSupplierParts('bme280').some((p) => p.id === 'bme280'), 'Search "bme280" finds BME280');
+  assert(searchSupplierParts('barometer').some((p) => p.id === 'bme280'), 'Search "barometer" finds BME280');
+
+  // 4. WCH CH340C (SOP-16, LCSC C85023, 5V/3.3V)
+  const ch340c = findPartById('ch340c');
+  assert(ch340c !== undefined, 'CH340C part must exist');
+  assert(ch340c.mpn === 'CH340C', 'CH340C MPN matches');
+  assert(ch340c.manufacturer === 'WCH', 'CH340C manufacturer is WCH');
+  assert(ch340c.lcsc === 'C85023', 'CH340C LCSC is C85023');
+  assert(ch340c.category === 'interface', 'CH340C category is interface');
+  assert(ch340c.pkg.includes('SOP-16'), 'CH340C package is SOP-16');
+  assert(ch340c.voltage === '5V/3.3V', 'CH340C voltage is 5V/3.3V');
+  assert(ch340c.padsCount === 16, 'CH340C has 16 pads');
+  assert(searchSupplierParts('C85023').some((p) => p.id === 'ch340c'), 'Search "C85023" finds CH340C');
+
+  // 5. TI DRV8825 (HTSSOP-28, LCSC C39243, 8.2-45V)
+  const drv8825 = findPartById('drv8825');
+  assert(drv8825 !== undefined, 'DRV8825 part must exist');
+  assert(drv8825.mpn === 'DRV8825', 'DRV8825 MPN matches');
+  assert(drv8825.manufacturer === 'Texas Instruments', 'DRV8825 manufacturer is Texas Instruments');
+  assert(drv8825.lcsc === 'C39243', 'DRV8825 LCSC is C39243');
+  assert(drv8825.category === 'power', 'DRV8825 category is power');
+  assert(drv8825.pkg.includes('HTSSOP-28'), 'DRV8825 package is HTSSOP-28');
+  assert(drv8825.voltage === '8.2-45V', 'DRV8825 voltage is 8.2-45V');
+  assert(drv8825.padsCount === 29, 'DRV8825 has 29 pads (28 pins + PowerPAD)');
+  assert(searchSupplierParts('stepper').some((p) => p.id === 'drv8825'), 'Search "stepper" finds DRV8825');
+  assert(searchSupplierParts('drv8825').some((p) => p.id === 'drv8825'), 'Search "drv8825" finds DRV8825');
+}
+
+// 13. Production-Ready BOM CSV and JSON exports (JLCPCB SMT / PCBWay compatible)
+{
+  const defaultState = { populated: true, reversed: false, burnt: false, cold: [] };
+  const testBoard: Board = {
+    w: 100,
+    h: 80,
+    thickness: 1.6,
+    nextId: 10,
+    components: [
+      {
+        id: 'r1',
+        ref: 'R1',
+        kind: 'resistor',
+        value: 10000,
+        at: [10, 10],
+        rot: 0,
+        side: 'F',
+        pads: [],
+        pins: { '1': 'net1', '2': 'net2' },
+        body: { shape: 'box', w: 2, h: 1.2, z: 0.5 },
+        state: defaultState
+      },
+      {
+        id: 'r2',
+        ref: 'R2',
+        kind: 'resistor',
+        value: 10000,
+        at: [20, 10],
+        rot: 0,
+        side: 'F',
+        pads: [],
+        pins: { '1': 'net2', '2': 'net3' },
+        body: { shape: 'box', w: 2, h: 1.2, z: 0.5 },
+        state: defaultState
+      },
+      {
+        id: 'c1',
+        ref: 'C1',
+        kind: 'capacitor',
+        value: 1e-7,
+        at: [30, 10],
+        rot: 0,
+        side: 'F',
+        pads: [],
+        pins: { '1': 'net3', '2': 'GND' },
+        body: { shape: 'box', w: 2, h: 1.2, z: 0.5 },
+        state: defaultState
+      },
+      {
+        id: 'rp2040',
+        ref: 'U1',
+        kind: 'ic',
+        value: 0,
+        label: 'RP2040',
+        at: [50, 40],
+        rot: 0,
+        side: 'F',
+        pads: [],
+        pins: { '1': 'net1' },
+        body: { shape: 'chip', w: 7, h: 7, z: 0.9 },
+        state: defaultState
+      },
+      {
+        id: 'ws2812b',
+        ref: 'D1',
+        kind: 'led',
+        value: 0,
+        label: 'WS2812B',
+        at: [70, 40],
+        rot: 0,
+        side: 'F',
+        pads: [],
+        pins: { '1': '5V' },
+        body: { shape: 'box', w: 5, h: 5, z: 1.5 },
+        state: defaultState
+      }
+    ],
+    traces: [],
+    vias: [],
+    blobs: [],
+    jumpers: [],
+    zones: [],
+    silk: [],
+    texts: []
+  };
+
+  // 13.1 CSV Export Test
+  const csv = exportBomCsv(testBoard);
+  assert(typeof csv === 'string', 'exportBomCsv returns a string');
+  const csvLines = csv.trim().split('\n');
+  assert(csvLines.length >= 4, `Expected at least 4 lines in BOM CSV, got ${csvLines.length}`);
+
+  // Validate exact required columns in CSV header
+  const header = csvLines[0];
+  assert(
+    header === 'Comment/Designator,Quantity,Footprint/Package,LCSC Part #,MPN,Description',
+    `CSV header must have exact required columns, got: ${header}`
+  );
+
+  // Validate grouping: R1 and R2 must be grouped together with Quantity = 2
+  const rGroupLine = csvLines.find((line) => line.includes('R1, R2') || line.includes('"R1, R2"'));
+  assert(rGroupLine !== undefined, 'R1 and R2 are grouped into single BOM row');
+  assert(rGroupLine.includes(',2,'), 'Grouped resistors have Quantity = 2');
+
+  // Validate RP2040 presence in CSV
+  const u1Line = csvLines.find((line) => line.includes('U1'));
+  assert(u1Line !== undefined && u1Line.includes('RP2040'), 'U1 RP2040 present in BOM CSV');
+  assert(u1Line.includes('C2040'), 'U1 has LCSC C2040 in BOM CSV');
+
+  // Validate WS2812B presence in CSV
+  const d1Line = csvLines.find((line) => line.includes('D1'));
+  assert(d1Line !== undefined && d1Line.includes('WS2812B'), 'D1 WS2812B present in BOM CSV');
+  assert(d1Line.includes('C114586'), 'D1 has LCSC C114586 in BOM CSV');
+
+  // 13.2 JSON Export Test
+  const jsonStr = exportBomJson(testBoard);
+  assert(typeof jsonStr === 'string', 'exportBomJson returns string');
+  const parsed = JSON.parse(jsonStr) as BomItem[];
+  assert(Array.isArray(parsed), 'exportBomJson produces valid JSON array');
+  assert(parsed.length === 4, `Expected 4 grouped items in JSON BOM, got ${parsed.length}`);
+
+  const rGroupJson = parsed.find((item) => item.designator === 'R1, R2');
+  assert(rGroupJson !== undefined, 'R1, R2 item present in JSON BOM');
+  assert(rGroupJson.quantity === 2, 'R1, R2 item quantity is 2');
+  assert(rGroupJson['Comment/Designator'] === 'R1, R2', 'Comment/Designator alias matches');
+  assert(rGroupJson['Quantity'] === 2, 'Quantity alias matches');
+  assert(rGroupJson['Footprint/Package'].length > 0, 'Footprint/Package is present');
+  assert(rGroupJson['MPN'].length > 0, 'MPN is present');
+  assert(rGroupJson['Description'].length > 0, 'Description is present');
+
+  const u1Json = parsed.find((item) => item.designator === 'U1');
+  assert(u1Json !== undefined && u1Json.mpn === 'RP2040', 'U1 RP2040 present in JSON BOM');
+  assert(u1Json.lcsc === 'C2040' && u1Json['LCSC Part #'] === 'C2040', 'U1 has LCSC C2040 in JSON BOM');
+
+  // 13.3 Empty board handling
+  const emptyBoard: Board = {
+    w: 50,
+    h: 50,
+    thickness: 1.6,
+    nextId: 1,
+    components: [],
+    traces: [],
+    vias: [],
+    blobs: [],
+    jumpers: [],
+    zones: [],
+    silk: [],
+    texts: []
+  };
+  const emptyCsv = exportBomCsv(emptyBoard);
+  assert(emptyCsv === 'Comment/Designator,Quantity,Footprint/Package,LCSC Part #,MPN,Description', 'Empty board CSV has only header');
+  const emptyJson = exportBomJson(emptyBoard);
+  assert(emptyJson === '[]', 'Empty board JSON is empty array');
 }
 
 console.log(`ALL CATALOG TESTS PASSED (${SUPPLIER_PARTS.length} parts tested with multi-token, alias, stem, package, and category filtering)`);
