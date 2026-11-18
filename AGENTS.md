@@ -97,4 +97,17 @@
 - **Memory Engine**: Connected via `ai-memory` (port `49374`).
 - **Knowledge Graph**: Indexed with `codebase-memory-mcp`.
 - **Handoff Baton**: Shared state between Antigravity CLI, Claude Code, and Codex.
+
+---
+
+## 🐝 6. Specialized Swarm Skills Matrix for Deadboard (`/swarm`)
+When launching a `/swarm` or spawning subagents, each worker must load its domain-specific skill:
+
+| Worker Role | Target Domains & Files | Primary Skills to Load |
+| :--- | :--- | :--- |
+| **`@graphics` / `@cad`** | 3D Motherboard viewer, Hero 3D, SVG CAD preview, 60 FPS Canvas2D (`src/home/hero3d.ts`, `src/ui/boardCreator.ts`) | `3d-web-experience`, `threejs-interaction`, `canvas-design`, `web-performance-optimization` |
+| **`@electronics` / `@catalog`** | Component catalog, pinouts, footprints, SPICE parameters (`src/parts/catalog.ts`, `src/spice/`) | `esp32`, `arm-cortex-expert`, `firmware-analyst`, `rea-tool-design` |
+| **`@builder` / `@workbench`** | Workbench tools, Board creator modal, Parts Bin dialog, UX workflows (`src/ui/app.ts`, `src/ui/boardCreator.ts`) | `hallmark`, `better-ui`, `ui-ux-pro-max`, `typescript-expert` |
+| **`@verifier` / `@qa`** | Unit tests, SPICE simulation convergence, regression auditing | `test-driven-development`, `tdd-workflow`, `systematic-debugging`, `pre-ship-gate` |
+| **`@coordinator`** | Swarm task decomposition, token routing, integration & release | `swarm`, `subagent-orchestrator`, `delegating-to-agents`, `review-swarm`, `bug-hunt-swarm` |
 <!-- agy-project-rag:end -->
