@@ -1,12 +1,24 @@
 // Interactive 3D Motherboard Viewer for DEADBOARD homepage
 // Renders open-hardware boards (ESP32, Pico, Arduino Uno, MNT Reform 2, Jetson Nano)
 // with high-performance 360-degree free orbit, mouse drag, touch pinch zoom, and Top/Bottom inspection.
+//
+// IMPORTANT: This viewer uses a dedicated Canvas2D pipeline for the homepage hero section.
+// WebGPU must NOT be initialized on this canvas — acquiring a 'webgpu' context prevents
+// subsequent getContext('2d') calls from succeeding (browser limitation: one context type
+// per canvas lifetime). The full WebGPU renderer is used only inside the app workbench
+// (app.html) where it has its own dedicated canvas.
 
 import { createEsp32DevScenario, createRaspberryPiPicoScenario, createArduinoUnoScenario, createRaspberryPiZeroScenario } from '../boards/presets';
 import { Camera } from '../render/camera';
-import { WebGPURenderer, type RenderSceneState } from '../render/webgpu';
 import { buildConnectivity, type Conn } from '../connectivity';
 import type { Board, Scenario } from '../types';
+
+const safeRaf = (cb: FrameRequestCallback): number =>
+  typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame(cb) : (setTimeout(cb, 16) as unknown as number);
+const safeCaf = (id: number): void => {
+  if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(id);
+  else clearTimeout(id);
+};
 
 export interface HeroViewerOptions {
   onLoadingChange?: (loading: boolean, text?: string) => void;
@@ -15,7 +27,6 @@ export interface HeroViewerOptions {
 export class Hero3DViewer {
   private canvas: HTMLCanvasElement;
   private camera: Camera;
-  private renderer: WebGPURenderer | null = null;
   private activeScenario: Scenario;
   private isDragging = false;
   private lastMouseX = 0;
@@ -25,7 +36,6 @@ export class Hero3DViewer {
   private rafId = 0;
   private lastTime = 0;
   private isVisible = true;
-  private webGpuAvailable = false;
   private options: HeroViewerOptions;
   private container: HTMLElement | null = null;
   private hintEl: HTMLElement | null = null;
@@ -60,18 +70,9 @@ export class Hero3DViewer {
     this.fitCanvas();
     this.updateCameraForBoard();
 
-    // Check WebGPU availability
-    if (typeof navigator !== 'undefined' && 'gpu' in navigator && navigator.gpu) {
-      try {
-        this.renderer = await WebGPURenderer.create(this.canvas);
-        this.webGpuAvailable = true;
-      } catch (e) {
-        console.warn('WebGPU unavailable on this system, using accelerated Canvas2D 3D fallback:', e);
-        this.webGpuAvailable = false;
-      }
-    } else {
-      this.webGpuAvailable = false;
-    }
+    // Hero viewer uses Canvas2D exclusively — WebGPU must NOT be initialized on
+    // this canvas because acquiring a 'webgpu' context prevents getContext('2d')
+    // from ever succeeding (one context type per canvas lifetime).
 
     // Set accessibility attributes on canvas
     this.canvas.setAttribute('tabindex', '0');
@@ -95,7 +96,7 @@ export class Hero3DViewer {
               this.lastTime = performance.now();
               this.startLoop();
             } else if (this.rafId) {
-              cancelAnimationFrame(this.rafId);
+              safeCaf(this.rafId);
               this.rafId = 0;
             }
           }
@@ -378,48 +379,21 @@ export class Hero3DViewer {
       const isMoving = this.autoOrbit || this.isDragging || changed;
 
       if (isMoving) {
-        this.rafId = requestAnimationFrame(tick);
+        this.rafId = safeRaf(tick);
       } else {
         // Sleep animation loop when completely idle to save 100% CPU/battery
         this.rafId = 0;
       }
     };
 
-    this.rafId = requestAnimationFrame(tick);
+    this.rafId = safeRaf(tick);
   }
 
   private render() {
     const b = this.activeScenario.board;
 
-    // For very large complex boards (MNT Reform 2, Jetson Nano with >200 parts), use WebGPU when available
-    if (b.components.length > 200 && this.webGpuAvailable && this.renderer) {
-      try {
-        const conn = this.getConn(b);
-        const scene: RenderSceneState = {
-          board: b,
-          conn,
-          sim: null,
-          powerOn: false,
-          vizMode: 'realistic',
-          selectedNet: -1,
-          selectedCompId: null,
-          hovered: null,
-          probeRed: null,
-          probeBlack: null,
-          activeTool: 'inspect',
-          jumperDraft: null,
-          cursorWorld: null,
-        };
-        this.renderer.render(this.camera, scene);
-        return;
-      } catch (err) {
-        console.warn('WebGPU render fallback to Canvas2D:', err);
-        this.webGpuAvailable = false;
-      }
-    }
-
-    // High-performance accelerated 3D motherboard renderer (distinctive RF shields, USB ports,
-    // DIP sockets, crystal oscillators, golden pin headers, antenna patterns, and silkscreen).
+    // All hero boards use the high-performance accelerated Canvas2D 3D renderer.
+    // The WebGPU path is only available in the full app workbench (app.html).
     this.renderEnhanced3D(b);
   }
 
@@ -895,7 +869,7 @@ export class Hero3DViewer {
 
   destroy() {
     if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
+      safeCaf(this.rafId);
       this.rafId = 0;
     }
     this.abortController.abort();
