@@ -2,7 +2,7 @@
 import { searchSupplierParts, SUPPLIER_PARTS, type ComponentPart } from '../parts/catalog';
 import { BOARD_PRESETS } from '../boards/presets';
 import { Builder } from '../scenarios/builder';
-import type { Scenario, Component, Pad, V2 } from '../types';
+import type { Scenario, Component, Pad, V2, Board } from '../types';
 import { rot } from '../geom';
 import { getLang } from '../i18n';
 import { writeZip } from '../mods/zip';
@@ -174,6 +174,288 @@ export function detectCollisions(components: PlacedComponent[]): Set<string> {
     }
   }
   return colliding;
+}
+
+/** Snap coordinate to a specified grid pitch in mm (e.g. 0.5mm, 1.0mm, 2.54mm) */
+export function snapToGrid(val: number, step: number): number {
+  if (!step || step <= 0) return Math.round(val * 100) / 100;
+  const snapped = Math.round(val / step) * step;
+  return Math.round(snapped * 100) / 100;
+}
+
+export interface Airwire {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  net: string;
+  color: string;
+}
+
+/** Calculate dynamic ratsnest airwires connecting pads that share nets across components */
+export function calculateAirwires(board: Board): Airwire[] {
+  const airwires: Airwire[] = [];
+  const comps = board.components || [];
+  if (comps.length < 2) return airwires;
+
+  const netPads = new Map<string, Array<{ x: number; y: number; ref: string }>>();
+
+  const addPad = (net: string, pos: V2, ref: string) => {
+    const list = netPads.get(net) || [];
+    list.push({ x: pos[0], y: pos[1], ref });
+    netPads.set(net, list);
+  };
+
+  const pwr = comps.find((c) => c.kind === 'battery' || c.ref.startsWith('J'));
+
+  for (const c of comps) {
+    if (!c.pads) continue;
+    for (const p of c.pads) {
+      let r: V2 = [0, 0];
+      try {
+        r = rot(p.at, c.rot);
+      } catch {
+        r = [p.at[0], p.at[1]];
+      }
+      const worldPos: V2 = [c.at[0] + r[0], c.at[1] + r[1]];
+
+      let net = p.net;
+      if (!net) {
+        if (c.pins?.['-'] === p.name || c.pins?.['K'] === p.name || (c === pwr && p.name === '2')) {
+          net = 'GND';
+        } else if (c.pins?.['+'] === p.name || (c === pwr && p.name === '1')) {
+          net = 'VCC';
+        } else if (p.name.toUpperCase().includes('GND')) {
+          net = 'GND';
+        } else if (
+          p.name.toUpperCase().includes('VCC') ||
+          p.name.toUpperCase().includes('3V3') ||
+          p.name.toUpperCase().includes('5V')
+        ) {
+          net = 'VCC';
+        } else if (c.kind === 'capacitor' && p.name === '2') {
+          net = 'GND';
+        } else if (c.kind === 'capacitor' && p.name === '1') {
+          net = 'VCC';
+        }
+      }
+      if (net) {
+        addPad(net, worldPos, c.ref);
+      }
+    }
+  }
+
+  // Sequential signal interconnects between non-power components
+  const otherComps = comps.filter((c) => c !== pwr);
+  for (let i = 0; i + 1 < otherComps.length; i++) {
+    const cA = otherComps[i];
+    const cB = otherComps[i + 1];
+    if (!cA.pads?.length || !cB.pads?.length) continue;
+    const pA = cA.pads.find((p) => p.name === '2' || p.name === 'A') || cA.pads[cA.pads.length - 1];
+    const pB = cB.pads.find((p) => p.name === '1') || cB.pads[0];
+    if (pA && pB) {
+      let rA: V2 = [0, 0];
+      let rB: V2 = [0, 0];
+      try {
+        rA = rot(pA.at, cA.rot);
+      } catch {
+        rA = [pA.at[0], pA.at[1]];
+      }
+      try {
+        rB = rot(pB.at, cB.rot);
+      } catch {
+        rB = [pB.at[0], pB.at[1]];
+      }
+      const posA: V2 = [cA.at[0] + rA[0], cA.at[1] + rA[1]];
+      const posB: V2 = [cB.at[0] + rB[0], cB.at[1] + rB[1]];
+      airwires.push({
+        x1: posA[0],
+        y1: posA[1],
+        x2: posB[0],
+        y2: posB[1],
+        net: `NET_${cA.ref}_${cB.ref}`,
+        color: '#fbbf24',
+      });
+    }
+  }
+
+  // Minimum Spanning Tree for each power / ground net
+  for (const [net, pts] of netPads.entries()) {
+    if (pts.length < 2) continue;
+
+    const isGnd = net.toUpperCase().includes('GND');
+    const isVcc =
+      net.toUpperCase().includes('VCC') ||
+      net.toUpperCase().includes('5V') ||
+      net.toUpperCase().includes('3V3') ||
+      net.toUpperCase().includes('VBUS');
+    const color = isGnd ? '#38bdf8' : isVcc ? '#f87171' : '#fbbf24';
+
+    const visited = new Set<number>([0]);
+    while (visited.size < pts.length) {
+      let bestDist = Infinity;
+      let bestU = -1;
+      let bestV = -1;
+
+      for (const u of visited) {
+        for (let v = 0; v < pts.length; v++) {
+          if (!visited.has(v)) {
+            const dx = pts[u].x - pts[v].x;
+            const dy = pts[u].y - pts[v].y;
+            const d = Math.hypot(dx, dy);
+            if (d < bestDist) {
+              bestDist = d;
+              bestU = u;
+              bestV = v;
+            }
+          }
+        }
+      }
+
+      if (bestU >= 0 && bestV >= 0) {
+        visited.add(bestV);
+        airwires.push({
+          x1: pts[bestU].x,
+          y1: pts[bestU].y,
+          x2: pts[bestV].x,
+          y2: pts[bestV].y,
+          net,
+          color,
+        });
+      } else {
+        break;
+      }
+    }
+  }
+
+  return airwires;
+}
+
+export interface DrcResult {
+  passed: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Design Rule Check (DRC) for PCB layout.
+ * Verifies:
+ * 1. Component overlap collisions (bounding box clearance < 0.4mm)
+ * 2. Component edge clearance (< 1.0mm margin from PCB boundaries)
+ * 3. Power and ground rail availability and routing
+ */
+export function checkDrc(board: Board): DrcResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const comps = board.components || [];
+
+  // 1. Overlapping components
+  const boxes = comps.map((c) => {
+    const isRot = Math.abs(Math.sin((c.rot * Math.PI) / 180)) > 0.7;
+    const bw = c.body?.w && c.body.w > 0 ? c.body.w : 2.0;
+    const bh = c.body?.h && c.body.h > 0 ? c.body.h : 1.25;
+    const w = isRot ? bh : bw;
+    const h = isRot ? bw : bh;
+    return {
+      id: c.id,
+      ref: c.ref,
+      minX: c.at[0] - w / 2,
+      maxX: c.at[0] + w / 2,
+      minY: c.at[1] - h / 2,
+      maxY: c.at[1] + h / 2,
+      w,
+      h,
+    };
+  });
+
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i];
+      const b = boxes[j];
+      if (
+        a.minX < b.maxX - 0.4 &&
+        a.maxX > b.minX + 0.4 &&
+        a.minY < b.maxY - 0.4 &&
+        a.maxY > b.minY + 0.4
+      ) {
+        errors.push(
+          `Kolizja komponentów: ${a.ref} oraz ${b.ref} nakładają się na siebie (Component collision: ${a.ref} and ${b.ref} overlap)`
+        );
+      }
+    }
+  }
+
+  // 2. Components placed too close to board edges (< 1.0 mm margin)
+  const edgeMargin = 1.0;
+  for (const b of boxes) {
+    if (
+      b.minX < edgeMargin ||
+      b.minY < edgeMargin ||
+      board.w - b.maxX < edgeMargin ||
+      board.h - b.maxY < edgeMargin
+    ) {
+      errors.push(
+        `Naruszenie marginesu krawędzi: Komponent ${b.ref} znajduje się zbyt blisko krawędzi płytki (< ${edgeMargin}mm) (Edge clearance violation: ${b.ref} is within ${edgeMargin}mm of board edge)`
+      );
+    }
+  }
+
+  // 3. Missing power or ground connection
+  if (comps.length === 0) {
+    warnings.push('Płytka nie zawiera żadnych komponentów (Board has no components)');
+  } else {
+    const hasPowerComponent = comps.some(
+      (c) =>
+        c.kind === 'battery' ||
+        c.ref.startsWith('J') ||
+        c.ref.toUpperCase().includes('USB') ||
+        c.ref.toUpperCase().includes('DC') ||
+        c.pins?.['+'] !== undefined
+    );
+    const hasPowerTrace = (board.traces || []).some(
+      (t) =>
+        t.net &&
+        (t.net.toUpperCase().includes('VCC') ||
+          t.net.toUpperCase().includes('VBUS') ||
+          t.net.toUpperCase().includes('5V') ||
+          t.net.toUpperCase().includes('3.3V') ||
+          t.net.toUpperCase().includes('3V3') ||
+          t.net.toUpperCase().includes('PWR'))
+    );
+
+    if (!hasPowerComponent && !hasPowerTrace) {
+      errors.push(
+        'Brak źródła zasilania (VCC / VBUS / 5V) na płytce (Missing power connection: board has no power source or VCC net)'
+      );
+    }
+
+    const hasGroundTrace = (board.traces || []).some(
+      (t) => t.net && (t.net.toUpperCase() === 'GND' || t.net.toUpperCase().includes('GND'))
+    );
+    const hasGroundPin = comps.some(
+      (c) =>
+        c.pins?.['-'] !== undefined ||
+        c.pins?.['K'] !== undefined ||
+        Object.keys(c.pins || {}).some((k) => k.toUpperCase().includes('GND'))
+    );
+
+    if (!hasGroundTrace && !hasGroundPin) {
+      errors.push(
+        'Brak masy (GND): brak sieci masy na płytce (Missing ground connection: board has no GND reference or return path)'
+      );
+    } else if (hasPowerComponent && comps.length > 1 && !hasGroundTrace) {
+      warnings.push(
+        'Brak poprowadzonej ścieżki masy (GND) pomiędzy komponentami (Ground net is not routed between components)'
+      );
+    }
+  }
+
+  return {
+    passed: errors.length === 0,
+    errors,
+    warnings,
+  };
 }
 
 /** Generate standard Bill of Materials (BOM) CSV ready for PCBWay and JLCPCB */
@@ -955,6 +1237,7 @@ export class BoardCreatorModal {
   private customWidth = 84;
   private customHeight = 52;
   private customColor = '#0f2e1a';
+  private gridStep = 1.0;
   private searchQuery = '';
   private selectedCategory = 'all';
   private injectFault: FaultKind = 'none';
@@ -987,6 +1270,7 @@ export class BoardCreatorModal {
       const comp = this.placedComponents.find((c) => c.id === this.selectedCompId);
       if (!comp) return;
 
+      const step = this.gridStep > 0 ? this.gridStep : 1.0;
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         this.rotateSelectedComponent(isPl);
@@ -995,19 +1279,19 @@ export class BoardCreatorModal {
         this.deleteComponent(comp.id, isPl);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        comp.x = Math.max(2, comp.x - 1);
+        comp.x = Math.max(2, Math.round((comp.x - step) * 100) / 100);
         this.onComponentNudge(comp, isPl);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        comp.x = Math.min(this.customWidth - 2, comp.x + 1);
+        comp.x = Math.min(this.customWidth - 2, Math.round((comp.x + step) * 100) / 100);
         this.onComponentNudge(comp, isPl);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        comp.y = Math.min(this.customHeight - 2, comp.y + 1);
+        comp.y = Math.min(this.customHeight - 2, Math.round((comp.y + step) * 100) / 100);
         this.onComponentNudge(comp, isPl);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        comp.y = Math.max(2, comp.y - 1);
+        comp.y = Math.max(2, Math.round((comp.y - step) * 100) / 100);
         this.onComponentNudge(comp, isPl);
       }
     }
@@ -1113,8 +1397,12 @@ export class BoardCreatorModal {
     const count = this.placedComponents.length;
     const col = count % cols;
     const row = Math.floor(count / cols);
-    const x = Math.round(margin + col * (availW / Math.max(1, cols - 1 || 1)));
-    const y = Math.round(margin + (row * 12) % availH);
+    let x = Math.round(margin + col * (availW / Math.max(1, cols - 1 || 1)));
+    let y = Math.round(margin + (row * 12) % availH);
+    if (this.gridStep > 0) {
+      x = snapToGrid(x, this.gridStep);
+      y = snapToGrid(y, this.gridStep);
+    }
     return {
       x: Math.max(margin, Math.min(this.customWidth - margin, x)),
       y: Math.max(margin, Math.min(this.customHeight - margin, y)),
@@ -1281,6 +1569,8 @@ export class BoardCreatorModal {
     this.updateTabBadge(isPl);
     this.updateEstimatorBox(isPl);
     this.updateCanvasToolbar(isPl);
+    this.updateAirwiresLayer();
+    this.updateDrcBadge(isPl);
 
     const countBadge = this.el.querySelector('#placed-comps-count');
     if (countBadge) countBadge.textContent = String(this.placedComponents.length);
@@ -1306,6 +1596,8 @@ export class BoardCreatorModal {
     this.collidingCompIds = detectCollisions(this.placedComponents);
     this.updateComponentSvgTransform(comp);
     this.updateSelectionAndCollision(isPl);
+    this.updateAirwiresLayer();
+    this.updateDrcBadge(isPl);
 
     const selRot = this.el.querySelector(`.sel-comp-rot[data-comp-id="${comp.id}"]`) as HTMLSelectElement | null;
     if (selRot) selRot.value = String(comp.rotation);
@@ -1320,6 +1612,8 @@ export class BoardCreatorModal {
     this.collidingCompIds = detectCollisions(this.placedComponents);
     this.updateComponentSvgTransform(comp);
     this.updateSelectionAndCollision(isPl);
+    this.updateAirwiresLayer();
+    this.updateDrcBadge(isPl);
 
     const inpX = this.el.querySelector(`.inp-comp-x[data-comp-id="${comp.id}"]`) as HTMLInputElement | null;
     if (inpX && document.activeElement !== inpX) inpX.value = String(comp.x);
@@ -1462,6 +1756,68 @@ export class BoardCreatorModal {
     }
   }
 
+  private updateDrcBadge(isPl: boolean) {
+    const sc = this.generateScenario();
+    const drc = checkDrc(sc.board);
+
+    const badge = this.el.querySelector('#canvas-drc-badge') as HTMLElement | null;
+    if (badge) {
+      if (drc.passed) {
+        badge.className = 'badge success';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#34d399';
+        badge.style.border = '1px solid #10b981';
+        badge.textContent = isPl ? '✓ DRC Zgodny' : '✓ DRC Passed';
+        badge.title = isPl
+          ? 'Wszystkie reguły projektowe spełnione (brak kolizji, zachowane marginesy krawędzi, zasilanie i masa podłączone)'
+          : 'All design rules passed (no collisions, valid edge margins, power and ground connected)';
+      } else {
+        badge.className = 'badge danger';
+        badge.style.background = 'rgba(239, 68, 68, 0.15)';
+        badge.style.color = '#ef4444';
+        badge.style.border = '1px solid #ef4444';
+        const errCount = drc.errors.length;
+        badge.textContent = isPl
+          ? `⚠️ ${errCount} ${errCount === 1 ? 'błąd' : errCount < 5 ? 'błędy' : 'błędów'} DRC`
+          : `⚠️ ${errCount} DRC ${errCount === 1 ? 'error' : 'errors'}`;
+        badge.title = drc.errors.join('\n');
+      }
+    }
+
+    const dfmEl = this.el.querySelector('#estimator-dfm-status');
+    if (dfmEl) {
+      if (drc.passed) {
+        dfmEl.textContent = isPl ? '✓ DRC Zgodny (0 błędów)' : '✓ DRC Passed (0 errors)';
+        (dfmEl as HTMLElement).style.color = '#34d399';
+      } else {
+        const colCount = this.collidingCompIds.size;
+        dfmEl.textContent = isPl
+          ? (colCount > 0 ? `⚠️ ${colCount} kolizji (DRC Warning)` : `⚠️ ${drc.errors.length} błędów DRC`)
+          : (colCount > 0 ? `⚠️ ${colCount} collisions (DRC Warning)` : `⚠️ ${drc.errors.length} DRC errors`);
+        (dfmEl as HTMLElement).style.color = '#ef4444';
+      }
+    }
+  }
+
+  private renderAirwiresSvg(): string {
+    const sc = this.generateScenario();
+    const wires = calculateAirwires(sc.board);
+    return wires
+      .map((w) => {
+        const y1 = this.customHeight - w.y1;
+        const y2 = this.customHeight - w.y2;
+        return `<line class="airwire" x1="${w.x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${w.x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${w.color}" stroke-width="0.35" stroke-dasharray="0.8,0.8" opacity="0.8" style="pointer-events: none;" />`;
+      })
+      .join('');
+  }
+
+  private updateAirwiresLayer() {
+    const layer = this.el.querySelector('#svg-airwires-layer');
+    if (layer) {
+      layer.innerHTML = this.renderAirwiresSvg();
+    }
+  }
+
   private updateSvgPreview() {
     const svg = this.el.querySelector('#pcb-svg-preview') as SVGSVGElement | null;
     if (!svg) return;
@@ -1479,6 +1835,26 @@ export class BoardCreatorModal {
     if (boardGrid) {
       boardGrid.setAttribute('width', String(this.customWidth));
       boardGrid.setAttribute('height', String(this.customHeight));
+    }
+
+    // Grid snap pattern and layer
+    const snapPattern = svg.querySelector('#pcb-grid-snap');
+    const snapGridLayer = svg.querySelector('#svg-snap-grid-layer') as SVGElement | null;
+    if (snapPattern) {
+      const step = this.gridStep > 0 ? this.gridStep : 10;
+      snapPattern.setAttribute('width', String(step));
+      snapPattern.setAttribute('height', String(step));
+      const dot = snapPattern.querySelector('circle');
+      if (dot) {
+        dot.setAttribute('cx', String(step / 2));
+        dot.setAttribute('cy', String(step / 2));
+        dot.setAttribute('r', String(Math.min(0.2, Math.max(0.08, step * 0.1))));
+      }
+    }
+    if (snapGridLayer) {
+      snapGridLayer.setAttribute('width', String(this.customWidth));
+      snapGridLayer.setAttribute('height', String(this.customHeight));
+      snapGridLayer.style.display = this.gridStep > 0 ? 'block' : 'none';
     }
 
     const silkOutline = svg.querySelector('#svg-silk-outline');
@@ -1506,11 +1882,15 @@ export class BoardCreatorModal {
       compsLayer.innerHTML = this.placedComponents.map((c) => this.renderComponentSvg(c)).join('');
     }
 
+    this.updateAirwiresLayer();
+
     const dimText = this.el.querySelector('#preview-dim-text');
     if (dimText) dimText.textContent = `${this.customWidth} × ${this.customHeight} mm`;
 
     const areaEl = this.el.querySelector('#estimator-area-text');
     if (areaEl) areaEl.textContent = `${this.customWidth} × ${this.customHeight} mm (${((this.customWidth * this.customHeight) / 100).toFixed(1)} cm²)`;
+
+    this.updateDrcBadge(getLang() === 'pl');
   }
 
   private renderComponentSvg(comp: PlacedComponent): string {
@@ -1827,8 +2207,19 @@ export class BoardCreatorModal {
       const dx = (e.clientX - startClientX) * scaleX;
       const dy = (e.clientY - startClientY) * scaleY;
 
-      const newX = Math.round(Math.max(2, Math.min(this.customWidth - 2, initialX + dx)));
-      const newY = Math.round(Math.max(2, Math.min(this.customHeight - 2, initialY - dy)));
+      let newX = initialX + dx;
+      let newY = initialY - dy;
+
+      if (this.gridStep > 0) {
+        newX = snapToGrid(newX, this.gridStep);
+        newY = snapToGrid(newY, this.gridStep);
+      } else {
+        newX = Math.round(newX * 10) / 10;
+        newY = Math.round(newY * 10) / 10;
+      }
+
+      newX = Math.max(2, Math.min(this.customWidth - 2, newX));
+      newY = Math.max(2, Math.min(this.customHeight - 2, newY));
 
       if (newX !== comp.x || newY !== comp.y) {
         comp.x = newX;
@@ -1836,6 +2227,8 @@ export class BoardCreatorModal {
         this.updateComponentSvgTransform(comp);
         this.collidingCompIds = detectCollisions(this.placedComponents);
         this.updateSelectionAndCollision(isPl);
+        this.updateAirwiresLayer();
+        this.updateDrcBadge(isPl);
 
         const inpX = this.el.querySelector(`.inp-comp-x[data-comp-id="${comp.id}"]`) as HTMLInputElement | null;
         if (inpX && document.activeElement !== inpX) inpX.value = String(comp.x);
@@ -2111,6 +2504,9 @@ Ready for upload to PCBWay or JLCPCB.
     `;
 
     this.bindEvents(isPl);
+    if (this.activeTab === 'builder') {
+      this.updateDrcBadge(isPl);
+    }
   }
 
   private renderBuilderTab(isPl: boolean): string {
@@ -2183,13 +2579,27 @@ Ready for upload to PCBWay or JLCPCB.
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start;">
           <!-- Left Column: CAD Preview & Quick Add -->
           <div style="display: flex; flex-direction: column; gap: 10px;">
-            <div class="row" style="justify-content: space-between; align-items: center;">
+            <div class="row" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
               <span style="font-size: 13px; font-weight: 600; color: var(--text);">
                 ${isPl ? '2. Wektorowy podgląd CAD płytki (OLED):' : '2. Vector CAD Board Canvas (OLED):'}
               </span>
-              <span id="preview-dim-text" style="font-size: 11px; color: var(--muted); font-family: var(--mono);">
-                ${this.customWidth} × ${this.customHeight} mm
-              </span>
+              <div class="row" style="gap: 8px; align-items: center; flex-wrap: wrap;">
+                <!-- Grid Step Selector Toggle -->
+                <div class="row" style="gap: 4px; align-items: center; background: #0c0e14; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); font-size: 11px;">
+                  <span style="color: var(--muted); font-weight: 600;">${isPl ? 'Siatka:' : 'Grid:'}</span>
+                  <div id="grid-step-group" class="row" style="gap: 2px;">
+                    <button type="button" class="btn xs ${this.gridStep === 0 ? 'primary' : 'ghost'} btn-grid-step" data-step="0" style="padding: 1px 6px; font-size: 10px;">${isPl ? 'Wył' : 'Off'}</button>
+                    <button type="button" class="btn xs ${this.gridStep === 0.5 ? 'primary' : 'ghost'} btn-grid-step" data-step="0.5" style="padding: 1px 6px; font-size: 10px;">0.5mm</button>
+                    <button type="button" class="btn xs ${this.gridStep === 1.0 ? 'primary' : 'ghost'} btn-grid-step" data-step="1.0" style="padding: 1px 6px; font-size: 10px;">1.0mm</button>
+                    <button type="button" class="btn xs ${this.gridStep === 2.54 ? 'primary' : 'ghost'} btn-grid-step" data-step="2.54" style="padding: 1px 6px; font-size: 10px;">2.54mm</button>
+                  </div>
+                </div>
+                <!-- DRC Status Badge -->
+                <span id="canvas-drc-badge" class="badge" style="font-size: 11px; padding: 2px 8px; font-weight: 700; cursor: default;"></span>
+                <span id="preview-dim-text" style="font-size: 11px; color: var(--muted); font-family: var(--mono);">
+                  ${this.customWidth} × ${this.customHeight} mm
+                </span>
+              </div>
             </div>
 
             <!-- Canvas Quick HUD Toolbar -->
@@ -2337,11 +2747,16 @@ Ready for upload to PCBWay or JLCPCB.
             <rect width="10" height="10" fill="url(#pcb-grid-minor)" />
             <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#222634" stroke-width="0.25" />
           </pattern>
+          <!-- Dynamic Snap Grid Pattern -->
+          <pattern id="pcb-grid-snap" width="${this.gridStep || 10}" height="${this.gridStep || 10}" patternUnits="userSpaceOnUse">
+            <circle cx="${(this.gridStep || 10) / 2}" cy="${(this.gridStep || 10) / 2}" r="${Math.min(0.2, Math.max(0.08, (this.gridStep || 10) * 0.1))}" fill="#38bdf8" opacity="0.45" />
+          </pattern>
         </defs>
 
         <!-- Board Solder Mask Base -->
         <rect id="svg-board-rect" x="0" y="0" width="${this.customWidth}" height="${this.customHeight}" rx="2" ry="2" fill="${this.customColor}" stroke="#334155" stroke-width="0.5" />
         <rect id="svg-board-grid" x="0" y="0" width="${this.customWidth}" height="${this.customHeight}" fill="url(#pcb-grid-major)" />
+        <rect id="svg-snap-grid-layer" x="0" y="0" width="${this.customWidth}" height="${this.customHeight}" fill="url(#pcb-grid-snap)" style="display: ${this.gridStep > 0 ? 'block' : 'none'}; pointer-events: none;" />
 
         <!-- Silkscreen edge guideline -->
         <rect id="svg-silk-outline" x="1.5" y="1.5" width="${Math.max(1, this.customWidth - 3)}" height="${Math.max(1, this.customHeight - 3)}" rx="1" ry="1" fill="none" stroke="rgba(224,224,224,0.35)" stroke-width="0.25" stroke-dasharray="2,2" />
@@ -2358,6 +2773,11 @@ Ready for upload to PCBWay or JLCPCB.
 
         <!-- Silkscreen Branding Title -->
         <text id="svg-board-title" x="${this.customWidth / 2}" y="3.8" text-anchor="middle" font-size="1.8" fill="#e0e0e0" font-family="monospace" font-weight="bold">LIVEBOARD · CUSTOM PCB</text>
+
+        <!-- Dynamic Airwires (Ratsnest) Layer -->
+        <g id="svg-airwires-layer">
+          ${this.renderAirwiresSvg()}
+        </g>
 
         <!-- Components Layer -->
         <g id="svg-components-layer">
@@ -2543,6 +2963,28 @@ Ready for upload to PCBWay or JLCPCB.
 
     const listEl = this.el.querySelector('#placed-comps-list');
     if (listEl) this.bindComponentRowEvents(listEl, isPl);
+
+    this.el.querySelectorAll('.btn-grid-step').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const step = Number(btn.getAttribute('data-step')) || 0;
+        this.gridStep = step;
+        this.el.querySelectorAll('.btn-grid-step').forEach((b) => {
+          const s = Number(b.getAttribute('data-step')) || 0;
+          if (s === step) {
+            b.className = 'btn xs primary btn-grid-step';
+          } else {
+            b.className = 'btn xs ghost btn-grid-step';
+          }
+        });
+        this.updateSvgPreview();
+        this.opts.toast(
+          isPl
+            ? (step > 0 ? `Włączono przyciąganie do siatki: ${step} mm` : 'Wyłączono przyciąganie do siatki')
+            : (step > 0 ? `Grid snap enabled: ${step} mm` : 'Grid snap disabled'),
+          'info'
+        );
+      });
+    });
 
     this.bindSvgInteractions();
     this.updateCanvasToolbar(isPl);

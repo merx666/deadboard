@@ -7,6 +7,9 @@ import {
   generateBomCsv,
   generateCplCsv,
   getResistorCode,
+  snapToGrid,
+  calculateAirwires,
+  checkDrc,
   type PlacedComponent,
   type FaultKind,
 } from '../src/ui/boardCreator';
@@ -191,4 +194,54 @@ const cplCsv = generateCplCsv(customComponents);
 assert(cplCsv.includes('Designator,Mid X,Mid Y,Layer,Rotation'), 'CPL CSV header valid');
 assert(cplCsv.includes('"J1",10.00,25.00,Top,0'), 'CPL CSV contains J1 placement coordinates');
 
-console.log('BoardCreator: custom blank PCB generation, component footprints, trace routing, fault injection, preset customization, collision detection, and production estimator — ok');
+// 9. Test Snap-to-Grid
+assert(snapToGrid(10.23, 0.5) === 10.0, 'snapToGrid 0.5mm snaps down correctly');
+assert(snapToGrid(10.35, 0.5) === 10.5, 'snapToGrid 0.5mm snaps up correctly');
+assert(snapToGrid(12.7, 1.0) === 13.0, 'snapToGrid 1.0mm snaps correctly');
+assert(snapToGrid(12.2, 1.0) === 12.0, 'snapToGrid 1.0mm snaps down correctly');
+assert(snapToGrid(5.0, 2.54) === 5.08, 'snapToGrid 2.54mm snaps to 5.08mm');
+assert(snapToGrid(0.0, 2.54) === 0.0, 'snapToGrid 2.54mm snaps 0.0 to 0.0');
+assert(snapToGrid(7.6, 2.54) === 7.62, 'snapToGrid 2.54mm snaps 7.6 to 7.62');
+assert(snapToGrid(10.23, 0) === 10.23, 'snapToGrid off (0) leaves coordinate unchanged');
+
+// 10. Test Dynamic Ratsnest Airwires
+const airwires = calculateAirwires(customSc.board);
+assert(airwires.length > 0, 'Ratsnest airwires generated for custom board');
+assert(airwires.some((w) => w.net.includes('GND') && w.color === '#38bdf8'), 'GND airwire generated with blue color');
+assert(airwires.some((w) => (w.net.includes('VCC') || w.net.includes('VBUS')) && w.color === '#f87171'), 'Power/VCC airwire generated with red color');
+for (const w of airwires) {
+  assert(typeof w.x1 === 'number' && typeof w.y1 === 'number', 'Airwire has valid start coordinate');
+  assert(typeof w.x2 === 'number' && typeof w.y2 === 'number', 'Airwire has valid end coordinate');
+  assert(typeof w.net === 'string' && w.net.length > 0, 'Airwire has valid net name');
+}
+
+// 11. Test Interactive Design Rule Check (DRC)
+// 11a. Clean custom board passes DRC
+const drcClean = checkDrc(customSc.board);
+assert(drcClean.passed === true, 'Clean routed board passes DRC');
+assert(drcClean.errors.length === 0, 'Clean board has zero DRC errors');
+
+// 11b. Overlapping components detected as DRC collision error
+const collidingBoard = JSON.parse(JSON.stringify(customSc.board));
+// Move second component to overlap with first component
+collidingBoard.components[1].at = [collidingBoard.components[0].at[0] + 0.3, collidingBoard.components[0].at[1] + 0.2];
+const drcCol = checkDrc(collidingBoard);
+assert(drcCol.passed === false, 'Overlapping components fail DRC');
+assert(drcCol.errors.some((e: string) => e.includes('collision') || e.includes('Kolizja')), 'DRC reports collision error');
+
+// 11c. Component placed too close to board edges (< 1.0mm margin) fails DRC
+const edgeBoard = JSON.parse(JSON.stringify(customSc.board));
+edgeBoard.components[0].at = [0.4, 25]; // Left edge margin violation
+const drcEdge = checkDrc(edgeBoard);
+assert(drcEdge.passed === false, 'Component closer than 1.0mm to edge fails DRC');
+assert(drcEdge.errors.some((e: string) => e.includes('krawędzi') || e.includes('Edge') || e.includes('clearance')), 'DRC reports edge clearance violation');
+
+// 11d. Missing power or ground connection fails DRC
+const noPwrBoard = JSON.parse(JSON.stringify(customSc.board));
+noPwrBoard.components = noPwrBoard.components.filter((c: any) => c.kind !== 'battery' && !c.ref.startsWith('J'));
+noPwrBoard.traces = [];
+const drcNoPwr = checkDrc(noPwrBoard);
+assert(drcNoPwr.passed === false, 'Board without power source fails DRC');
+assert(drcNoPwr.errors.some((e: string) => e.includes('zasilania') || e.includes('power')), 'DRC reports missing power connection');
+
+console.log('BoardCreator: custom blank PCB generation, component footprints, trace routing, fault injection, preset customization, collision detection, snap-to-grid, dynamic airwires, interactive DRC, and production estimator — ok');
