@@ -1,18 +1,18 @@
 /**
- * Internationalization (i18n) module for DEADBOARD.
+ * Internationalization (i18n) module for LiveBoard (PulsePCB).
  * Supports Polish (pl - default) and English (en).
- * Stored in localStorage ('deadboard_lang') with instant runtime reactivity.
+ * Stored in localStorage ('liveboard_lang' / 'deadboard_lang') with instant runtime reactivity.
  */
 
 export type Lang = 'pl' | 'en';
 
-const STORAGE_KEY = 'deadboard_lang';
+const STORAGE_KEY = 'liveboard_lang';
 
 export function getInitialLang(): Lang {
   if (typeof window === 'undefined') return 'pl';
   const urlParam = new URLSearchParams(window.location.search).get('lang');
   if (urlParam === 'en' || urlParam === 'pl') return urlParam;
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('deadboard_lang');
   if (stored === 'en' || stored === 'pl') return stored;
   return 'pl'; // Default to Polish as requested
 }
@@ -161,13 +161,13 @@ export interface I18nDict {
 
 export const DICT_PL: I18nDict = {
   brand: {
-    name: 'DEADBOARD',
-    descriptor: 'Trenażer naprawy elektroniki na poziomie komponentów',
+    name: 'LiveBoard',
+    descriptor: 'PulsePCB Studio — Interaktywne Projektowanie i Symulacja Własnych Płytek PCB',
   },
   nav: {
-    home: 'Strona główna DEADBOARD',
-    browseBoards: 'Przeglądaj płytki i zadania',
-    newBoard: 'Nowa czysta płytka',
+    home: 'Strona główna LiveBoard',
+    browseBoards: 'Przeglądaj projekty i wyzwania',
+    newBoard: 'Nowy projekt PCB',
     importBoard: 'Importuj .brd, .kicad_pcb, .pcbfix.json lub mod .zip',
     view2D: 'Widok 2D',
     view3D: 'Widok 3D',
@@ -307,11 +307,11 @@ export const DICT_PL: I18nDict = {
     reset: 'Resetuj płytkę do stanu początkowego',
   },
   tabs: {
-    mission: 'Zadanie',
-    inspect: 'Inspektor',
-    author: 'Twórca',
-    videos: 'Wideo',
-    mods: 'Modyfikacje',
+    mission: 'Laboratorium & Wyzwania',
+    inspect: 'Inspektor Elementu',
+    author: 'Twórca Płytek',
+    videos: 'Wideo Poradniki',
+    mods: 'Modyfikacje i Rozszerzenia',
   },
   statusbar: {
     lmb: 'LPM: Narzędzie / Przesuwanie',
@@ -466,7 +466,7 @@ export const DICT_PL: I18nDict = {
     close: 'Zamknij',
   },
   shortcuts: {
-    title: 'Skróty Klawiszowe Warsztatu DEADBOARD',
+    title: 'Skróty Klawiszowe Warsztatu LiveBoard',
     toolsHeading: 'Wybór Narzędzi',
     navigationHeading: 'Sterowanie Widokiem i Kamerą',
     actionsHeading: 'Operacje Warsztatowe',
@@ -476,13 +476,13 @@ export const DICT_PL: I18nDict = {
 
 export const DICT_EN: I18nDict = {
   brand: {
-    name: 'DEADBOARD',
-    descriptor: 'Board-level repair trainer',
+    name: 'LiveBoard',
+    descriptor: 'PulsePCB Prototyping & Circuit Simulation Studio',
   },
   nav: {
-    home: 'DEADBOARD home',
-    browseBoards: 'Browse all boards & tutorials',
-    newBoard: 'New blank board',
+    home: 'LiveBoard home',
+    browseBoards: 'Browse all boards & challenge lab',
+    newBoard: 'New blank PCB project',
     importBoard: 'Import .brd, .kicad_pcb, .pcbfix.json, or a mod .zip',
     view2D: '2D view',
     view3D: '3D view',
@@ -622,11 +622,11 @@ export const DICT_EN: I18nDict = {
     reset: 'Reset board',
   },
   tabs: {
-    mission: 'Overview',
+    mission: 'Lab & Challenges',
     inspect: 'Inspector',
-    author: 'Author',
-    videos: 'Videos',
-    mods: 'Mods',
+    author: 'PCB Designer',
+    videos: 'Video Guides',
+    mods: 'Mods & Packages',
   },
   statusbar: {
     lmb: 'LMB Tool / Drag Pan',
@@ -716,7 +716,7 @@ export const DICT_EN: I18nDict = {
     close: 'Close',
   },
   shortcuts: {
-    title: 'DEADBOARD Bench Keyboard Shortcuts',
+    title: 'LiveBoard Studio Keyboard Shortcuts',
     toolsHeading: 'Tool Selection',
     navigationHeading: 'Navigation & Camera',
     actionsHeading: 'Bench Actions',

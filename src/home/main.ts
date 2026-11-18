@@ -59,7 +59,10 @@ function renderLandingText(lang: Lang) {
     navLinks[4].textContent = dict.nav.mods;
   }
   const topCta = document.querySelector<HTMLAnchorElement>('.nav .btn.primary');
-  if (topCta) topCta.textContent = dict.nav.openBench;
+  if (topCta) {
+    topCta.href = './app.html?action=new-board';
+    topCta.textContent = dict.nav.openBench;
+  }
 
   // Hero
   const heroEyebrow = document.querySelector<HTMLElement>('.hero .eyebrow');
@@ -72,10 +75,16 @@ function renderLandingText(lang: Lang) {
   if (heroLede) heroLede.textContent = dict.hero.lede;
 
   const ctaPrimary = document.querySelector<HTMLAnchorElement>('.hero .cta .btn.primary');
-  if (ctaPrimary) ctaPrimary.innerHTML = `${dict.hero.ctaPrimary} <span aria-hidden="true">→</span>`;
+  if (ctaPrimary) {
+    ctaPrimary.href = './app.html?action=new-board';
+    ctaPrimary.innerHTML = `${dict.hero.ctaPrimary} <span aria-hidden="true">→</span>`;
+  }
 
   const ctaTut = document.querySelector<HTMLAnchorElement>('.hero .cta .btn.ghost');
-  if (ctaTut) ctaTut.textContent = dict.hero.ctaTutorial;
+  if (ctaTut) {
+    ctaTut.href = './app.html?boards=1';
+    ctaTut.textContent = dict.hero.ctaTutorial;
+  }
 
   const heroReq = document.querySelector<HTMLElement>('.hero .req');
   if (heroReq) heroReq.textContent = dict.hero.req;
@@ -83,13 +92,20 @@ function renderLandingText(lang: Lang) {
   const figcaption = document.querySelector<HTMLElement>('#hero-figcaption');
   if (figcaption) {
     figcaption.textContent = lang === 'pl'
-      ? 'Interaktywny model 3D otwartej płytki drukowanej: swobodny obrót w 3D, inspekcja ścieżek, padów i elementów SMD/THT przed przystąpieniem do naprawy.'
-      : 'Interactive 3D open-hardware circuit board: free 360° orbit, inspect traces, pads, and SMD/THT components before repair.';
+      ? 'Interaktywny model 3D otwartej płytki drukowanej w LiveBoard: swobodny obrót w 3D, inspekcja ścieżek, padów i elementów SMD/THT przed symulacją.'
+      : 'Interactive 3D PCB model in LiveBoard: free 360° orbit, inspect traces, pads, and SMD/THT footprints with real-time SPICE simulation.';
   }
 
   const frameTitle = document.querySelector<HTMLElement>('#hero-frame-title');
   if (frameTitle) {
-    frameTitle.textContent = lang === 'pl' ? 'deadboard — interaktywny stół 3D' : 'deadboard — 3D interactive bench';
+    frameTitle.textContent = lang === 'pl' ? 'LiveBoard — interaktywne studio 3D PCB' : 'LiveBoard — 3D PCB interactive studio';
+  }
+
+  const barOpen = document.querySelector<HTMLAnchorElement>('.hero-bar-open');
+  if (barOpen) {
+    barOpen.href = './app.html?action=new-board';
+    barOpen.textContent = lang === 'pl' ? '▶ Studio PCB' : '▶ PCB Studio';
+    barOpen.title = lang === 'pl' ? 'Otwórz studio projektowe PCB' : 'Open PCB Design Studio';
   }
 
   const hintText = document.querySelector<HTMLElement>('#hero-3d-hint-text');
@@ -197,8 +213,11 @@ function renderLandingText(lang: Lang) {
   if (finalSec) {
     const fH2 = finalSec.querySelector('h2');
     if (fH2) fH2.textContent = dict.final.title;
-    const fCta = finalSec.querySelector('.btn.primary');
-    if (fCta) fCta.innerHTML = `${dict.final.cta} <span aria-hidden="true">→</span>`;
+    const fCta = finalSec.querySelector<HTMLAnchorElement>('.btn.primary');
+    if (fCta) {
+      fCta.href = './app.html?action=new-board';
+      fCta.innerHTML = `${dict.final.cta} <span aria-hidden="true">→</span>`;
+    }
   }
 
   // Footer
@@ -207,9 +226,22 @@ function renderLandingText(lang: Lang) {
     const muted = foot.querySelector('.muted');
     if (muted) muted.innerHTML = `${dict.footer.subtitle} <span data-year>${new Date().getFullYear()}</span>`;
     const footLinks = foot.querySelectorAll('a');
-    if (footLinks[0]) footLinks[0].textContent = dict.footer.openBench;
-    if (footLinks[1]) footLinks[1].textContent = dict.footer.makeMod;
-    if (footLinks[2]) footLinks[2].textContent = dict.footer.feedback;
+    if (footLinks[0]) {
+      footLinks[0].href = './app.html?action=new-board';
+      footLinks[0].textContent = dict.footer.openBench;
+    }
+    if (footLinks[1]) {
+      footLinks[1].href = './app.html?boards=1';
+      footLinks[1].textContent = lang === 'pl' ? 'Katalog Płytek' : 'Board Catalog';
+    }
+    if (footLinks[2]) {
+      footLinks[2].href = './modding.html';
+      footLinks[2].textContent = dict.footer.makeMod;
+    }
+    if (footLinks[3]) {
+      footLinks[3].href = './app.html?feedback';
+      footLinks[3].textContent = dict.footer.feedback;
+    }
   }
 }
 

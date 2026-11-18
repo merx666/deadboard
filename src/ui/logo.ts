@@ -17,8 +17,8 @@ export function markSvg(size = 20, colors: { board?: string; signal?: string; fi
 }
 
 export const BRAND = {
-  name: 'DEADBOARD',
-  tagline: 'Bring dead boards back.',
-  descriptor: 'Board-level repair trainer',
+  name: 'LiveBoard',
+  tagline: 'PulsePCB Studio — Interaktywne Projektowanie i Symulacja Własnych Płytek PCB',
+  descriptor: 'LiveBoard (PulsePCB Studio) — Interactive PCB Design & Real-Time Simulation',
   site: 'https://tholtman1-del.github.io/deadboard/',
 } as const;

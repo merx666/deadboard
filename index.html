@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DEADBOARD — Przywróć martwe płyty do życia</title>
-    <meta name="description" content="Trenażer naprawy elektroniki na poziomie komponentów w Twojej przeglądarce: multimetr, zasilacz z prądem rozruchu, oscyloskop, kamera termowizyjna i stacja lutownicza na realnych płytach open-hardware." />
-    <meta name="theme-color" content="#090c0a" />
-    <meta property="og:title" content="DEADBOARD — Przywróć martwe płyty do życia" />
-    <meta property="og:description" content="Stół warsztatowy elektronika w przeglądarce. Pomiary, oscyloskop, wstrzykiwanie napięcia, reflow." />
+    <title>LiveBoard — PulsePCB Studio | Interaktywne Projektowanie i Symulacja Własnych Płytek PCB</title>
+    <meta name="description" content="LiveBoard (PulsePCB Studio): Interaktywne środowisko projektowania i symulacji płytek drukowanych PCB w Twojej przeglądarce. Twórz własne obwody z symulacją SPICE w czasie rzeczywistym, biblioteką komponentów LCSC/PCBWay i podglądem 3D." />
+    <meta name="theme-color" content="#070709" />
+    <meta property="og:title" content="LiveBoard — Studio Projektowania i Symulacji PCB | PulsePCB" />
+    <meta property="og:description" content="Projektuj, testuj i symuluj własne płytki drukowane w czasie rzeczywistym w przeglądarce. Baza części LCSC/PCBWay, symulacja SPICE, pełny podgląd 3D." />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   </head>
   <body>
     <a class="skip" href="#main">Przejdź do treści</a>
 
     <header class="nav">
-      <a class="logo" href="./" aria-label="DEADBOARD home"><span data-mark></span><span class="wordmark">DEADBOARD</span></a>
+      <a class="logo" href="./" aria-label="LiveBoard home"><span data-mark></span><span class="wordmark">LiveBoard</span></a>
       <nav aria-label="Sekcje">
         <a href="#bench">Warsztat</a>
         <a href="#faults">Usterki</a>
@@ -22,32 +22,31 @@
         <a href="#challenges">Wyzwania</a>
         <a href="./modding.html">Mody</a>
       </nav>
-      <a class="btn primary small" href="./app.html">Otwórz warsztat</a>
+      <a class="btn primary small" href="./app.html?action=new-board">Uruchom Studio PCB</a>
     </header>
 
     <main id="main">
       <!-- hero -->
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">&gt; trenażer naprawy elektroniki</p>
-          <h1>Przywróć martwe płyty do życia.</h1>
+          <p class="eyebrow">&gt; studio projektowania &amp; symulacji pcb</p>
+          <h1>Zaprojektuj i Przetestuj Własną Płytkę PCB w Przeglądarce</h1>
           <p class="lede">
-            DEADBOARD to profesjonalny stół warsztatowy w Twojej przeglądarce. Diagnozuj rzeczywiste płyty open-hardware multimetrem,
-            mierz prąd rozruchu z zasilacza laboratoryjnego, badaj oscyloskopem węzły przetwornic, lokalizuj zwarcia
-            kamerą termowizyjną i lutuj kolbą podlegającą prawom fizyki.
+            Interaktywne środowisko projektowe z symulacją SPICE w czasie rzeczywistym, biblioteką komponentów LCSC/PCBWay i podglądem 3D.
+            Twórz unikalne obwody od zera, rozmieszczaj elementy z bazy dostawców lub badaj i diagnozuj gotowe projekty sprzętowe.
           </p>
           <div class="cta">
-            <a class="btn primary" href="./app.html">Otwórz warsztat <span aria-hidden="true">→</span></a>
-            <a class="btn ghost" href="./app.html?tutorial=1">Naucz się podstaw · 5 min</a>
+            <a class="btn primary" href="./app.html?action=new-board">Uruchom Studio PCB (Stwórz Własną Płytkę) <span aria-hidden="true">→</span></a>
+            <a class="btn ghost" href="./app.html?boards=1">Zobacz Gotowe Projekty (ESP32, Pico, Arduino)</a>
           </div>
-          <p class="req">Działa w Chrome, Edge 113+, Safari 26+ (WebGPU). Bez instalacji.</p>
+          <p class="req">Działa w Chrome, Edge 113+, Safari 26+ (WebGPU). Błyskawiczny start bez instalacji.</p>
         </div>
 
         <figure class="hero-shot">
           <div class="frame">
             <div class="frame-bar">
               <i></i><i></i><i></i>
-              <span id="hero-frame-title">deadboard — interaktywny stół 3D</span>
+              <span id="hero-frame-title">LiveBoard — interaktywne studio 3D PCB</span>
               <div class="hero-3d-toolbar">
                 <button class="hero-bar-btn active" id="hero-btn-orbit" title="Włącz / wyłącz automatyczny obrót 3D">⟳ Obrót 3D</button>
                 <button class="hero-bar-btn" id="hero-btn-top" title="Widok z góry / Top view">Góra (Top)</button>
@@ -57,13 +56,14 @@
                   <option value="esp32">ESP32 DevKit (Wi-Fi/3.3V)</option>
                   <option value="pico">Raspberry Pi Pico (RP2040)</option>
                   <option value="arduino">Arduino Uno R3 (5V/3.3V)</option>
+                  <option value="zero">Raspberry Pi Zero 2 W</option>
                   <option value="reform">MNT Reform 2 (Laptop · 530 parts)</option>
                   <option value="jetson">Antmicro Jetson Nano (392 parts)</option>
                 </select>
-                <a class="hero-bar-btn hero-bar-open" href="./app.html" title="Otwórz pełny warsztat z przyrządami pomiarowymi">▶ Warsztat</a>
+                <a class="hero-bar-btn hero-bar-open" href="./app.html?action=new-board" title="Otwórz studio projektowe PCB">▶ Studio PCB</a>
               </div>
             </div>
-            <div class="hero-canvas-container" style="position: relative; width: 100%; height: clamp(340px, 48vw, 560px); background: #060a08; overflow: hidden; cursor: grab;">
+            <div class="hero-canvas-container" style="position: relative; width: 100%; height: clamp(340px, 48vw, 560px); background: #070709; overflow: hidden; cursor: grab;">
               <canvas id="hero-3d-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
               <div id="hero-3d-loader" class="hero-3d-loader" aria-live="polite"></div>
               <div class="hero-3d-hint">
@@ -71,7 +71,7 @@
               </div>
             </div>
           </div>
-          <figcaption id="hero-figcaption">Interaktywny model 3D otwartej płytki drukowanej: swobodny obrót w 3D, inspekcja ścieżek, padów i elementów SMD/THT przed przystąpieniem do naprawy.</figcaption>
+          <figcaption id="hero-figcaption">Interaktywny model 3D otwartej płytki drukowanej w LiveBoard: swobodny obrót w 3D, inspekcja ścieżek, padów i elementów SMD/THT przed symulacją.</figcaption>
         </figure>
       </section>
 
@@ -83,14 +83,14 @@ seq   S5 → S4 → S3 → S0 ...........  0.0 mA
 S0    +5V +3V3 +1V2 up ............ 10.3 mA
 S0    loads settle ................ 16.2 mA
 ok    board alive</code></pre>
-        <p class="term-note">To płyta z powyższej ilustracji, uruchamiająca się na stole pomiarowym. Zablokowana szyna zatrzymuje sekwencję, a zwarcie powoduje ciągłą pętlę restartu (boot-loop).</p>
+        <p class="term-note">Projekt płytki uruchamiający się w silniku symulacji LiveBoard. Analiza szyn zasilania, prądu rozruchu i stabilności sygnałów w czasie rzeczywistym.</p>
       </section>
 
       <!-- the bench -->
       <section id="bench" class="section">
-        <p class="eyebrow">&gt; stół warsztatowy</p>
-        <h2>Przyrządy, które zachowują się jak prawdziwe przyrządy.</h2>
-        <p class="section-lede">Wszystkie narzędzia, po które sięga technik serwisu — z tymi samymi ograniczeniami i cechami fizycznymi.</p>
+        <p class="eyebrow">&gt; wirtualne laboratorium pomiarowe</p>
+        <h2>Profesjonalne przyrządy badawcze i pomiarowe.</h2>
+        <p class="section-lede">Wszystkie narzędzia inżynierskie, po które sięga projektant i elektronik — z pełnymi prawami fizyki i realistycznymi ograniczeniami.</p>
         <div class="cards">
           <article class="card">
             <span class="card-ic" data-icon="meter"></span>
@@ -100,30 +100,30 @@ ok    board alive</code></pre>
           <article class="card">
             <span class="card-ic" data-icon="power"></span>
             <h3>Zasilacz laboratoryjny</h3>
-            <p>Rzeczywisty prąd rozruchu: czuwanie, uśpienie, praca. Ograniczenie prądowe (OCP) oraz wstrzykiwanie napięcia, by rozgrzać zwarty element na szynie.</p>
+            <p>Rzeczywisty prąd rozruchu: czuwanie, uśpienie, praca. Ograniczenie prądowe (OCP) oraz wstrzykiwanie napięcia, by zbadać reakcję termiczną i odpowiedź dynamiczną obwodu.</p>
             <svg class="viz" viewBox="0 0 220 56" aria-hidden="true"><path d="M2 52 H40 V44 H80 V36 H120 V12 H218" class="viz-amber"/></svg>
           </article>
           <article class="card">
             <span class="card-ic" data-icon="scope"></span>
             <h3>Oscyloskop cyfrowy</h3>
-            <p>Analiza narastania napięć zasilania i pętli boot-loop. Badanie kluczowania przetwornic DC-DC, tętnień szyn i generatorów zegarowych.</p>
+            <p>Analiza narastania napięć zasilania i odpowiedzi impulsowej. Badanie kluczowania przetwornic DC-DC, tętnień szyn i generatorów zegarowych.</p>
             <svg class="viz" viewBox="0 0 220 56" aria-hidden="true"><path d="M2 46 H22 V12 H52 V46 H82 V12 H112 V46 H142 V12 H172 V46 H202 V12 H218" class="viz-yellow"/></svg>
           </article>
           <article class="card">
             <span class="card-ic" data-icon="snow"></span>
             <h3>Kamera termowizyjna</h3>
-            <p>Prawdziwy obraz w podczerwieni: czysta cyna ma niską emisyjność. Zamrażacz w sprayu, alkohol izopropylowy (IPA) i metoda kalafoniowa do precyzyjnej lokalizacji zwarć.</p>
+            <p>Prawdziwy obraz w podczerwieni: czysta cyna ma niską emisyjność. Zamrażacz w sprayu, alkohol izopropylowy (IPA) i podgląd rozkładu temperatur na powierzchni laminatu.</p>
             <svg class="viz" viewBox="0 0 220 56" aria-hidden="true"><defs><radialGradient id="hot"><stop offset="0" stop-color="#fff3b0"/><stop offset=".35" stop-color="#ff8a3d"/><stop offset=".7" stop-color="#7a1fa2"/><stop offset="1" stop-color="#1b1446" stop-opacity="0"/></radialGradient></defs><rect x="2" y="4" width="216" height="48" rx="6" fill="#1b1446"/><circle cx="140" cy="28" r="34" fill="url(#hot)"/></svg>
           </article>
           <article class="card">
             <span class="card-ic" data-icon="iron"></span>
             <h3>Lutowanie i rework</h3>
-            <p>Kolba lutownicza, stacja hot-air, podgrzewacz dolny. Rola topnika, odprowadzanie ciepła przez płaszczyzny masy i ryzyko zerwania przegrzanych padów.</p>
+            <p>Kolba lutownicza, stacja hot-air, podgrzewacz dolny. Wymiana i lutowanie komponentów z bazy LCSC, rola topnika i odprowadzanie ciepła przez płaszczyzny miedzi.</p>
           </article>
           <article class="card">
             <span class="card-ic" data-icon="target"></span>
-            <h3>Widok płytki (Boardview)</h3>
-            <p>Obie strony laminatu, rzut 2D lub pełny obrót 3D. Kliknij element, by zobaczyć bieg jego połączeń. Wyszukuj setki części jednym naciśnięciem klawisza.</p>
+            <h3>Widok płytki (Boardview &amp; 3D)</h3>
+            <p>Obie strony laminatu, rzut 2D lub pełny obrót 3D. Kliknij element, by zobaczyć bieg jego ścieżek i netlistę. Wyszukuj setki części jednym naciśnięciem klawisza.</p>
           </article>
         </div>
       </section>
@@ -131,14 +131,14 @@ ok    board alive</code></pre>
       <!-- faults -->
       <section id="faults" class="section split">
         <div>
-          <p class="eyebrow">&gt; usterki laboratoryjne</p>
-          <h2>Płyty psują się tak, jak w rzeczywistości.</h2>
+          <p class="eyebrow">&gt; testy odporności i usterki</p>
+          <h2>Diagnostyka problemów i rzeczywiste awarie.</h2>
           <p class="section-lede">
-            Nie chodzi o proste "brakuje części, znajdź ją". Usterki mają realną głębokość i objawy fizyczne.
-            Niektóre ujawniają się dopiero po nagrzaniu lub dociśnięciu laminatu.
+            Testuj niezawodność projektów PCB w warunkach granicznych lub rozwiązuj laboratoryjne zadania diagnostyczne.
+            Usterki mają realną głębokość fizyczną i reagują na temperaturę oraz nacisk mechaniczny.
           </p>
         </div>
-        <ul class="tags" aria-label="Rodzaje usterek">
+        <ul class="tags" aria-label="Rodzaje usterek i testów">
           <li>zwarty kondensator MLCC</li><li>upływność kondensatora</li><li>osad po zalaniu cieczą</li><li>utleniona miedź</li>
           <li>przebity układ scalony</li><li>uszkodzony stabilizator LDO</li><li>rozjechana rezystancja</li><li>oporowy zimny lut</li>
           <li>przerwa po nagrzaniu</li><li>przewodzi tylko po dociśnięciu</li><li>upływność termiczna</li><li>zerwany pad lutowniczy</li>
@@ -149,24 +149,22 @@ ok    board alive</code></pre>
       <!-- boards -->
       <section id="boards" class="section split">
         <div>
-          <p class="eyebrow">&gt; prawdziwe płyty</p>
-          <h2>Dowolna płytka. Bez sztywnego skryptowania.</h2>
+          <p class="eyebrow">&gt; baza projektów i komponentów</p>
+          <h2>Twórz własne płytki lub badaj otwarte projekty.</h2>
           <p class="section-lede">
-            Importuj pliki boardview (.brd) lub projekty KiCad (.kicad_pcb). DEADBOARD samodzielnie odnajduje strukturę szyn zasilania,
-            przetwornice i stany zasilania z netlisty, a następnie symuluje całą płytkę w silniku SPICE.
-            W każdej chwili możesz wyeksportować netlistę zgodną z ngspice.
+            LiveBoard to kreator własnych płytek PCB zintegrowany z biblioteką części LCSC / PCBWay oraz importem projektów KiCad (.kicad_pcb) i boardview (.brd).
+            Silnik automatycznie mapuje netlistę, przetwornice i szyny zasilania, a następnie symuluje zachowanie obwodu w SPICE.
           </p>
           <p class="section-lede">
-            Stworzyłeś własną płytkę? Spakuj projekt, schemat i listę elementów jako <a href="./modding.html">modyfikację</a>,
-            którą każdy może zainstalować.
+            Zaprojektowałeś płytkę? Spakuj projekt, schemat i listę elementów jako <a href="./modding.html">modyfikację</a> lub wyeksportuj do fabrykacji.
           </p>
         </div>
         <div class="honest">
-          <p class="eyebrow">&gt; rzetelna symulacja</p>
-          <h3>Każda liczba ma swoje źródło.</h3>
+          <p class="eyebrow">&gt; rzetelna symulacja spice</p>
+          <h3>Każda wartość ma inżynieryjne źródło.</h3>
           <p>
-            Wartości parametrów pochodzą z danych projektowych, not katalogowych i założeń inżynieryjnych. Tam, gdzie danych brakuje,
-            wartości są jasno oznaczone jako szacunki, a syntetyzowane przebiegi są wyraźnie sygnalizowane na oscyloskopie.
+            Parametry elementów pochodzą bezpośrednio z not katalogowych producentów i modeli SPICE. Wszelkie przybliżenia są wyraźnie sygnalizowane,
+            a symulator umożliwia kalibrację parametrów w oparciu o fizyczne pomiary laboratoryjne.
           </p>
         </div>
       </section>
@@ -174,11 +172,11 @@ ok    board alive</code></pre>
       <!-- challenges -->
       <section id="challenges" class="section challenge">
         <div class="challenge-copy">
-          <p class="eyebrow">&gt; wyzwania naprawcze</p>
-          <h2>Zepsuj obwód. Zablokuj flagę. Podziel się linkiem.</h2>
+          <p class="eyebrow">&gt; wyzwania inżynieryjne</p>
+          <h2>Projektuj zagadki. Zablokuj flagę. Dziel się linkiem.</h2>
           <p class="section-lede">
-            Zacznij od działającej płyty, wprowadź usterki i zablokuj flagę kryptograficzną na poprawnym stanie obwodu.
-            Flaga jest szyfrowana topologią połączeń — odblokuje ją wyłącznie realna, poprawna naprawa.
+            Twórz wyzwania CTF oparte na elektronice: wprowadź celowe usterki i zablokuj flagę kryptograficzną na poprawnym stanie obwodu.
+            Flaga szyfrowana jest topologią połączeń — odblokuje ją wyłącznie realna, poprawna naprawa.
           </p>
         </div>
         <pre class="term small" aria-label="Przykładowe wyzwanie"><code>$ verify
@@ -192,16 +190,17 @@ $ verify
 
       <!-- final CTA -->
       <section class="final">
-        <h2>Na stole czeka martwa płyta.</h2>
-        <a class="btn primary" href="./app.html">Otwórz warsztat <span aria-hidden="true">→</span></a>
+        <h2>Zaprojektuj swoją pierwszą płytkę PCB już teraz.</h2>
+        <a class="btn primary" href="./app.html?action=new-board">Uruchom Studio PCB (Stwórz Własną Płytkę) <span aria-hidden="true">→</span></a>
       </section>
     </main>
 
     <footer class="foot">
-      <span class="logo small"><span data-mark></span><span class="wordmark">DEADBOARD</span></span>
-      <span class="muted">Trenażer naprawy elektroniki · <span data-year></span></span>
-      <a href="./app.html">Otwórz warsztat</a>
-      <a href="./modding.html">Stwórz modyfikację</a>
+      <span class="logo small"><span data-mark></span><span class="wordmark">LiveBoard</span></span>
+      <span class="muted">LiveBoard · PulsePCB Studio · Interaktywne Projektowanie i Symulacja PCB · <span data-year></span></span>
+      <a href="./app.html?action=new-board">Uruchom Studio PCB</a>
+      <a href="./app.html?boards=1">Katalog Płytek</a>
+      <a href="./modding.html">Dokumentacja &amp; Mody</a>
       <a href="./app.html?feedback">Zgłoś opinię</a>
     </footer>
 

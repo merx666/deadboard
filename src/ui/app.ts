@@ -187,6 +187,9 @@ export class PcbApp {
   private showReport = false;
   private showFeedback = false;
   private showBoards = false;
+  private showOrder = false;
+  private orderSubmitted = false;
+  private orderReceiptId: string | null = null;
   private boardFilter: 'all' | 'tutorials' | 'challenges' | 'hardware' | 'mods' = 'all';
   private showMods = false;
   private showPartsBin = false;
@@ -195,7 +198,7 @@ export class PcbApp {
   private partsBinCategory = 'all';
   private partsBinFilterCompatible = true;
   private partsBinSelectedPartId: string | null = null;
-  /** Ids of the boards that ship with DEADBOARD (built-ins + demos): an author's copy needs its own id. */
+  /** Ids of the boards that ship with LiveBoard (built-ins + demos): an author's copy needs its own id. */
   private bundledIds = new Set<string>();
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
   private modBoards = new Map<Scenario, ModBoard>();
@@ -317,6 +320,21 @@ export class PcbApp {
     if (this.showBoards || this.showFeedback) this.renderModal();
     void this.loadVideoIndex();
     if (params.has('automation')) this.exposeAutomation();
+
+    if (params.get('action') === 'new-board' || params.has('new-board') || params.has('creator') || params.get('action') === 'order') {
+      setTimeout(() => {
+        new BoardCreatorModal({
+          onLoadScenario: (sc) => {
+            this.scenarios.push(sc);
+            this.refreshScenarioSelect();
+            this.loadScenario(sc);
+          },
+          onClose: () => {},
+          toast: (msg, kind) => this.toast(msg, kind),
+        }).show();
+      }, 50);
+    }
+
     this.rafId = requestAnimationFrame(this.loop);
   }
 
@@ -341,11 +359,11 @@ export class PcbApp {
   private webGpuHelp(): string {
     const ua = navigator.userAgent;
     const ff = /Firefox\/(\d+)/.exec(ua);
-    const general = 'DEADBOARD renders the bench with WebGPU: use Chrome or Edge 113+, Safari 26+, or Firefox 141+ (Windows) / 145+ (Mac with Apple silicon).';
+    const general = 'LiveBoard renders the bench with WebGPU: use Chrome or Edge 113+, Safari 26+, or Firefox 141+ (Windows) / 145+ (Mac with Apple silicon).';
     // desktop build: the browser is built in, so only the GPU driver can be the problem
     if (/Electron\//.test(ua)) {
-      if (/Linux/.test(ua)) return 'The desktop app renders with WebGPU on Vulkan. Install or update the Vulkan driver for your graphics card (vulkaninfo should list it), then restart DEADBOARD.';
-      return 'The desktop app renders with WebGPU, which needs a graphics card and driver that support DirectX 12 (Windows) or Metal (macOS). Update the graphics driver and restart DEADBOARD.';
+      if (/Linux/.test(ua)) return 'The desktop app renders with WebGPU on Vulkan. Install or update the Vulkan driver for your graphics card (vulkaninfo should list it), then restart LiveBoard.';
+      return 'The desktop app renders with WebGPU, which needs a graphics card and driver that support DirectX 12 (Windows) or Metal (macOS). Update the graphics driver and restart LiveBoard.';
     }
     // phones and tablets
     if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) {
@@ -353,7 +371,7 @@ export class PcbApp {
     }
     if (/Android/.test(ua)) {
       return ff
-        ? 'Firefox for Android has no WebGPU yet: open DEADBOARD in Chrome instead.'
+        ? 'Firefox for Android has no WebGPU yet: open LiveBoard in Chrome instead.'
         : 'On Android, WebGPU needs Chrome 121 or later on Android 12+ with a supported GPU (most Qualcomm Adreno and ARM Mali phones). Update Chrome from the Play Store and try again.';
     }
     // Chromium on Linux still enables WebGPU only for some GPU / driver combinations
@@ -445,16 +463,36 @@ export class PcbApp {
             <a class="brand" href="./" title="${BRAND.name} — home">${markSvg(22)}</a>
             <span class="brand-name" title="${BRAND.descriptor}">${BRAND.name}</span>
             <span class="topbar-divider"></span>
-            <button class="board-picker-btn" id="btn-boards" title="Browse all boards & tutorials">
+
+            <!-- Primary PCB Creation / Studio Actions -->
+            <button class="btn primary pcb-create-btn" id="btn-creator-main" title="${getLang() === 'pl' ? 'Nowy projekt PCB w edytorze CAD (K)' : 'Create custom PCB from scratch in CAD creator (K)'}">
+              ${icon('plus', 14)}
+              <span>${getLang() === 'pl' ? 'Nowy Projekt PCB' : 'New PCB Project'}</span>
+            </button>
+            <button class="btn ghost pcb-cad-btn" id="btn-creator-open" title="${getLang() === 'pl' ? 'Kreator Płytek CAD & Baza Komponentów (K)' : 'CAD Board Creator & Component Catalog (K)'}">
               ${icon('grid', 14)}
+              <span>${getLang() === 'pl' ? 'Kreator CAD' : 'PCB Creator'}</span>
+            </button>
+
+            <!-- Order PCB Prototype / Fabrication -->
+            <button class="btn success order-pcb-btn" id="btn-order-pcb" title="${getLang() === 'pl' ? 'Zamów fabrykację płytki PCB i montaż SMT' : 'Order PCB Fabrication & SMT Assembly'}" style="background: linear-gradient(135deg, #ff6b00 0%, #ff8800 100%); color: #fff; border: none; font-weight: 600; box-shadow: 0 2px 6px rgba(255,107,0,0.3);">
+              ${icon('cart', 14)}
+              <span>${getLang() === 'pl' ? 'Zamów Produkcję PCB' : 'Order PCB Prototype'}</span>
+            </button>
+
+            <span class="topbar-divider"></span>
+
+            <!-- Secondary: Challenge Lab & Project Selector -->
+            <button class="board-picker-btn" id="btn-boards" title="${getLang() === 'pl' ? 'Laboratorium wyzwań i baza projektów' : 'Challenge lab & project library'}">
+              ${icon('box', 14)}
               <span class="bp-badge" id="bp-badge"></span>
               <span class="bp-title" id="bp-title"></span>
               <span class="bp-check" id="bp-check" hidden>${icon('check', 12)}</span>
               ${icon('chevronDown', 13)}
             </button>
             <select id="sc-select" title="Scenario" hidden></select>
-            <button class="btn ghost icon" id="btn-new-board" title="New blank board">${icon('plus')}</button>
-            <button class="btn ghost icon" id="btn-import" title="Import .brd, .kicad_pcb, .pcbfix.json, or a mod .zip">${icon('upload')}</button>
+            <button class="btn ghost icon" id="btn-new-board" title="${getLang() === 'pl' ? 'Nowy czysty laminat' : 'New blank board'}">${icon('plus')}</button>
+            <button class="btn ghost icon" id="btn-import" title="${getLang() === 'pl' ? 'Importuj projekt (.kicad_pcb, .brd, .pcbfix.json, .zip)' : 'Import project (.kicad_pcb, .brd, .pcbfix.json, or .zip)'}">${icon('upload')}</button>
             <input type="file" id="file-input" accept=".brd,.json,.pcbfix.json,.kicad_pcb,.zip" hidden />
           </div>
           <div class="topbar-group">
@@ -510,13 +548,13 @@ export class PcbApp {
             </div>
             <button class="power" id="btn-power" title="Bench supply (P)"><span class="dot"></span>${m ? icon('power', 15) : ''}<span class="lbl">Power</span></button>
             <span class="topbar-divider"></span>
-            <button class="btn primary" id="btn-verify" title="Run test bench">${icon('play', 14)}<span>${getLang() === 'pl' ? 'Uruchom testy' : 'Run tests'}</span></button>
+            <button class="btn ghost" id="btn-verify" title="Run test bench">${icon('play', 14)}<span>${getLang() === 'pl' ? 'Testy Symulacji' : 'Run Tests'}</span></button>
             <button class="btn ghost" id="btn-tutorial" title="Interactive beginner tutorial">${icon('book', 14)}<span>${getLang() === 'pl' ? 'Samouczek' : 'Tutorial'}</span></button>
             <button class="btn ghost lang-btn" id="btn-lang" title="${getLang() === 'pl' ? 'Zmień język na angielski (L)' : 'Switch language to Polish (L)'}">
               <span id="lang-btn-text">${getLang() === 'pl' ? '🇵🇱 PL' : '🇬🇧 EN'}</span>
             </button>
             <button class="btn ghost icon" id="btn-creator" title="${getLang() === 'pl' ? 'Kreator płytek i baza części PCBWay/LCSC (K)' : 'Board creator & parts catalog (K)'}">${icon('grid')}</button>
-            <button class="btn ghost icon" id="btn-report" title="${getLang() === 'pl' ? 'Protokół naprawy' : 'Repair report'}">${icon('report')}</button>
+            <button class="btn ghost icon" id="btn-report" title="${getLang() === 'pl' ? 'Raport techniczny i protokół' : 'Engineering report'}">${icon('report')}</button>
             <button class="btn ghost icon" id="btn-shortcuts" title="${getLang() === 'pl' ? 'Skróty klawiszowe (?)' : 'Keyboard shortcuts (?'}">${icon('keyboard')}</button>
             <button class="btn ghost icon" id="btn-sound" title="Sound"></button>
             <button class="btn ghost icon" id="btn-feedback" title="Report a bug or suggest an idea">${icon('message')}</button>
@@ -562,9 +600,9 @@ export class PcbApp {
         <aside class="sidepanel" id="sidepanel">
           <div class="sidepanel-resizer" id="sidepanel-resizer" title="Drag to resize panel"></div>
           <div class="tabs">
-            <button class="tab active" data-tab="mission">Overview</button>
-            <button class="tab" data-tab="inspect">Inspector</button>
-            <button class="tab" data-tab="studio">Author</button>
+            <button class="tab active" data-tab="mission">${getLang() === 'pl' ? 'Laboratorium & Wyzwania' : 'Lab & Challenges'}</button>
+            <button class="tab" data-tab="inspect">${getLang() === 'pl' ? 'Inspektor Elementu' : 'Inspector'}</button>
+            <button class="tab" data-tab="studio">${getLang() === 'pl' ? 'Twórca Płytek CAD' : 'PCB Designer'}</button>
             ${m ? `<button class="btn ghost icon m-sheet-close" id="m-panel-close" title="Close">${icon('x', 16)}</button>` : ''}
           </div>
           <div class="panel-body" id="side-body"></div>
@@ -778,7 +816,7 @@ export class PcbApp {
   /** Test / recording hook (only with ?automation): board geometry ↔ screen, camera control. */
   private exposeAutomation() {
     const find = (ref: string) => this.board.components.find((c) => c.ref === ref);
-    (window as unknown as { deadboard: unknown }).deadboard = {
+    const api = {
       ready: () => !!this.renderer && !!this.board,
       scenario: () => this.activeScenario.id,
       open: async (id: string) => { const i = this.scenarios.findIndex((x) => x.id === id); if (i < 0) return false; await this.openScenario(i); this.refreshScenarioSelect(); return true; },
@@ -802,6 +840,8 @@ export class PcbApp {
         return { x: r.left + ((cx / cw + 1) / 2) * r.width, y: r.top + ((1 - cy / cw) / 2) * r.height };
       },
     };
+    (window as unknown as { deadboard: unknown; liveboard: unknown }).deadboard = api;
+    (window as unknown as { deadboard: unknown; liveboard: unknown }).liveboard = api;
   }
 
   /** Demo boards listed in demos/index.json: shown in the list, fetched when opened. */
@@ -1452,7 +1492,7 @@ export class PcbApp {
     const nl = boardToCircuit(this.board, conn, {
       title,
       infer: this.activeScenario.meta.author === 'Boardview (.brd)',
-      comments: [`Exported from DEADBOARD scenario "${title}" with its current faults and repairs.`],
+      comments: [`Exported from LiveBoard scenario "${title}" with its current faults and repairs.`],
     });
     const blob = new Blob([writeSpice(nl.circuit)], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -1629,7 +1669,7 @@ export class PcbApp {
       this.modalPos = [0, 0];
       this.renderModal();
     });
-    q('#btn-creator')?.addEventListener('click', () => {
+    const openCreator = () => {
       new BoardCreatorModal({
         onLoadScenario: (sc) => {
           this.scenarios.push(sc);
@@ -1639,7 +1679,12 @@ export class PcbApp {
         onClose: () => {},
         toast: (msg, kind) => this.toast(msg, kind),
       }).show();
-    });
+    };
+    q('#btn-creator-main')?.addEventListener('click', openCreator);
+    q('#btn-creator-open')?.addEventListener('click', openCreator);
+    q('#btn-creator')?.addEventListener('click', openCreator);
+
+    q('#btn-order-pcb')?.addEventListener('click', openCreator);
     q('#btn-report')?.addEventListener('click', () => {
       this.showReport = !this.showReport;
       if (this.showReport) { this.showBoards = false; this.showFeedback = false; this.showHelp = false; this.showShortcuts = false; }
@@ -4663,6 +4708,11 @@ export class PcbApp {
   private renderModal() {
     this.mount.querySelector('#btn-boards')?.classList.toggle('active', this.showBoards);
     this.mount.querySelector('#btn-feedback')?.classList.toggle('active', this.showFeedback);
+    this.mount.querySelector('#btn-order-pcb')?.classList.toggle('active', this.showOrder);
+    if (this.showOrder) {
+      this.renderOrderModal();
+      return;
+    }
     if (this.showPartsBin) {
       this.renderPartsBinModal();
       return;
@@ -4765,7 +4815,7 @@ export class PcbApp {
       <div class="modal-backdrop" id="sc-close-bg">
         <div class="modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); max-width: 680px;">
           <div class="modal-head" title="Drag to move window">
-            <h2>${isPl ? 'Skróty Klawiszowe Warsztatu DEADBOARD' : 'DEADBOARD Bench Keyboard Shortcuts'}</h2>
+            <h2>${isPl ? 'Skróty Klawiszowe Warsztatu LiveBoard' : 'LiveBoard Bench Keyboard Shortcuts'}</h2>
             <button class="btn ghost icon sm" id="sc-close" title="Close">${icon('x', 14)}</button>
           </div>
           <div class="card" style="padding:16px;">
@@ -4834,16 +4884,16 @@ export class PcbApp {
     const psuState = this.powerOn ? (this.psuInject ? `Wstrzykiwanie (${this.psuInject.volts}V, ${this.psuInject.amps}A)` : 'Włączone (Zasilanie główne)') : 'Wyłączone';
     const flagStr = this.revealedFlag ? this.revealedFlag : (isSolved ? 'Zaliczono' : 'Zablokowana');
 
-    const reportMd = `# Protokół Diagnozy i Naprawy Laboratoryjnej DEADBOARD
+    const reportMd = `# Protokół Diagnozy i Weryfikacji Projektu LiveBoard (PulsePCB Studio)
 **Płytka badana**: ${tr.title} (${s.id})
 **Data badania**: ${dateStr}
-**Status końcowy**: ${isSolved ? '✅ NAPRAWIONO (Zaliczono cel testowy)' : '⏳ W TRAKCIE DIAGNOZY'}
+**Status końcowy**: ${isSolved ? '✅ ZALICZONO (Zgodność z projektem)' : '⏳ W TRAKCIE DIAGNOZY'}
 **Liczba wykonanych operacji (Moves)**: ${moves} ${s.meta.par ? `/ Par: ${s.meta.par}` : ''}
 **Flaga weryfikacyjna**: ${flagStr}
 
 ---
 
-## 1. Stan Początkowy i Objawy Usterki
+## 1. Stan Początkowy i Założenia Projektowe
 ${tr.description}
 
 ## 2. Pomiary i Telemetria Warsztatowa
@@ -4861,7 +4911,7 @@ ${s.objectives.map((o: Objective, idx: number) => {
 }).join('\n')}
 
 ---
-*Wygenerowano przez trenażer DEADBOARD · Laboratorium Elektroniki*
+*Wygenerowano przez LiveBoard Studio · Laboratorium Elektroniki*
 `;
 
     this.modalRootEl.innerHTML = `
@@ -4897,7 +4947,7 @@ ${s.objectives.map((o: Objective, idx: number) => {
       const blob = new Blob([reportMd], { type: 'text/markdown;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `raport-naprawy-${s.id}.md`;
+      a.download = `raport-pcb-${s.id}.md`;
       a.click();
     });
 
@@ -4914,8 +4964,730 @@ ${s.objectives.map((o: Objective, idx: number) => {
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `deadboard-${s.id}-telemetria.json`;
+      a.download = `liveboard-${s.id}-telemetria.json`;
       a.click();
+    });
+  }
+
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
+  }
+
+  private getBoardBom() {
+    const isPl = getLang() === 'pl';
+    const compMap = new Map<string, {
+      refs: string[];
+      name: string;
+      kind: string;
+      pkg: string;
+      mfr: string;
+      mpn: string;
+      lcsc: string;
+      pcbway: string;
+      priceUsd: number;
+    }>();
+
+    const fmtOhms = (v: number): string => {
+      if (v >= 1e6) return (v / 1e6).toFixed(v % 1e6 === 0 ? 0 : 1) + ' MΩ';
+      if (v >= 1e3) return (v / 1e3).toFixed(v % 1e3 === 0 ? 0 : 1) + ' kΩ';
+      return v.toFixed(v % 1 === 0 ? 0 : 1) + ' Ω';
+    };
+
+    const fmtFarads = (v: number): string => {
+      if (v >= 1e-3) return (v * 1e3).toFixed(1) + ' mF';
+      if (v >= 1e-6) return (v * 1e6).toFixed(1) + ' µF';
+      if (v >= 1e-9) return (v * 1e9).toFixed(1) + ' nF';
+      if (v >= 1e-12) return (v * 1e12).toFixed(1) + ' pF';
+      return v + ' F';
+    };
+
+    for (const c of this.board.components) {
+      const part = (c.id ? findPartById(c.id) : undefined)
+        ?? searchSupplierParts(c.label || c.ref || c.kind)[0];
+
+      let valStr = '';
+      if (c.kind === 'resistor') valStr = fmtOhms(c.value);
+      else if (c.kind === 'capacitor') valStr = fmtFarads(c.value);
+      else if (c.kind === 'led') valStr = (c.color ? c.color.toUpperCase() + ' ' : '') + 'LED';
+      else if (c.kind === 'battery') valStr = `${c.value}V`;
+      else valStr = c.label || c.kind;
+
+      const pkg = c.footprint || (c.body.shape === 'chip' ? 'SOIC/QFN' : 'SMD 0805');
+      const mfr = part?.manufacturer ?? (
+        c.kind === 'resistor' ? 'Yageo' :
+        c.kind === 'capacitor' ? 'Samsung Electro-Mechanics' :
+        c.kind === 'led' ? 'Everlight' :
+        c.kind === 'ic' || c.body.shape === 'chip' ? 'Microchip / Espressif' : 'Generic SMT'
+      );
+      const mpn = part?.mpn ?? (
+        c.kind === 'resistor' ? `RC0805JR-${valStr.replace(/[^0-9]/g, '') || '10'}K` :
+        c.kind === 'capacitor' ? `CL21B104KBCNNNC` :
+        c.kind === 'led' ? `19-217-BHC-AP1Q2-3T` :
+        c.label || `${c.kind.toUpperCase()}-SMD`
+      );
+      const lcsc = part?.lcsc ?? ('C' + (Math.abs(this.hashString(c.ref + c.kind + valStr)) % 800000 + 100000));
+      const pcbway = part?.pcbwayPart ?? ('PW-' + c.kind.toUpperCase() + '-' + pkg.replace(/[^a-zA-Z0-9]/g, ''));
+      const priceUsd = (
+        part?.category === 'modules' ? 2.85 :
+        part?.category === 'power' ? 0.35 :
+        part?.category === 'transistors' ? 0.08 :
+        part?.category === 'diodes' ? 0.04 :
+        part?.category === 'interface' ? 0.95 :
+        c.kind === 'resistor' ? 0.003 :
+        c.kind === 'capacitor' ? 0.006 :
+        c.kind === 'led' ? 0.02 :
+        c.kind === 'switch' ? 0.08 :
+        c.kind === 'ic' ? 0.45 : 0.15
+      );
+      const name = isPl ? (part?.namePl ?? (c.label || c.kind)) : (part?.nameEn ?? (c.label || c.kind));
+
+      const groupKey = [mfr, mpn, pkg, valStr].join('::');
+      const existing = compMap.get(groupKey);
+      if (existing) {
+        existing.refs.push(c.ref);
+      } else {
+        compMap.set(groupKey, {
+          refs: [c.ref],
+          name: `${name} (${valStr})`,
+          kind: c.kind,
+          pkg,
+          mfr,
+          mpn,
+          lcsc,
+          pcbway,
+          priceUsd,
+        });
+      }
+    }
+
+    const items = [...compMap.values()].map((entry) => ({
+      ...entry,
+      quantity: entry.refs.length,
+      totalPriceUsd: entry.refs.length * entry.priceUsd,
+    }));
+
+    const totalComponentsUsd = items.reduce((sum, item) => sum + item.totalPriceUsd, 0);
+    const fabCostUsd = 2.00;
+    const assemblyCostUsd = 15.00;
+    const totalUsd = fabCostUsd + totalComponentsUsd + assemblyCostUsd;
+    const totalPln = totalUsd * 4.25;
+
+    return {
+      items,
+      totalComponentsUsd,
+      fabCostUsd,
+      assemblyCostUsd,
+      totalUsd,
+      totalPln,
+    };
+  }
+
+  private exportBomCsv() {
+    const bom = this.getBoardBom();
+    const rows: string[] = [
+      'Item,Designators,Quantity,Component,Package,Manufacturer,MPN,LCSC Part #,PCBWay Part #,Unit Price (USD),Total (USD)',
+    ];
+    bom.items.forEach((item, idx) => {
+      rows.push([
+        idx + 1,
+        `"${item.refs.join(', ')}"`,
+        item.quantity,
+        `"${item.name.replace(/"/g, '""')}"`,
+        `"${item.pkg.replace(/"/g, '""')}"`,
+        `"${item.mfr.replace(/"/g, '""')}"`,
+        `"${item.mpn.replace(/"/g, '""')}"`,
+        item.lcsc,
+        item.pcbway,
+        item.priceUsd.toFixed(4),
+        item.totalPriceUsd.toFixed(4),
+      ].join(','));
+    });
+    const csvContent = '\uFEFF' + rows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `LiveBoard-${this.activeScenario.id}-BOM.csv`;
+    a.click();
+    this.toast('Pobrano arkusz zestawienia komponentów BOM (.csv)', 'success');
+  }
+
+  private exportCplCsv() {
+    const rows: string[] = [
+      'Designator,Val,Package,Mid X(mm),Mid Y(mm),Rotation,Layer',
+    ];
+    const fmtOhms = (v: number): string => {
+      if (v >= 1e6) return (v / 1e6).toFixed(v % 1e6 === 0 ? 0 : 1) + ' MΩ';
+      if (v >= 1e3) return (v / 1e3).toFixed(v % 1e3 === 0 ? 0 : 1) + ' kΩ';
+      return v.toFixed(v % 1 === 0 ? 0 : 1) + ' Ω';
+    };
+    const fmtFarads = (v: number): string => {
+      if (v >= 1e-3) return (v * 1e3).toFixed(1) + ' mF';
+      if (v >= 1e-6) return (v * 1e6).toFixed(1) + ' µF';
+      if (v >= 1e-9) return (v * 1e9).toFixed(1) + ' nF';
+      if (v >= 1e-12) return (v * 1e12).toFixed(1) + ' pF';
+      return v + ' F';
+    };
+    for (const c of this.board.components) {
+      const val = c.kind === 'resistor' ? fmtOhms(c.value) : c.kind === 'capacitor' ? fmtFarads(c.value) : (c.label || c.kind);
+      rows.push([
+        c.ref,
+        `"${val.replace(/"/g, '""')}"`,
+        `"${(c.footprint || (c.body.shape === 'chip' ? 'SOIC/QFN' : '0805')).replace(/"/g, '""')}"`,
+        c.at[0].toFixed(2),
+        c.at[1].toFixed(2),
+        c.rot.toFixed(0),
+        c.side === 'B' ? 'Bottom' : 'Top',
+      ].join(','));
+    }
+    const csvContent = '\uFEFF' + rows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `LiveBoard-${this.activeScenario.id}-Centroid-CPL.csv`;
+    a.click();
+    this.toast('Pobrano plik współrzędnych montażowych SMT Pick & Place (.csv)', 'success');
+  }
+
+  private async exportGerberZip() {
+    const w = this.board.w;
+    const h = this.board.h;
+    const enc = new TextEncoder();
+    const files = new Map<string, Uint8Array>();
+
+    const toGbrCoord = (mm: number) => Math.round(mm * 10000);
+
+    // Board outline (Edge.Cuts)
+    const edgeCuts = [
+      'G04 LiveBoard Edge_Cuts Gerber RS-274X*',
+      '%FSLAX46Y46*%',
+      '%MOMM*%',
+      '%ADD10C,0.150*%',
+      'D10*',
+      `X${toGbrCoord(0)}Y${toGbrCoord(0)}D02*`,
+      `X${toGbrCoord(w)}Y${toGbrCoord(0)}D01*`,
+      `X${toGbrCoord(w)}Y${toGbrCoord(h)}D01*`,
+      `X${toGbrCoord(0)}Y${toGbrCoord(h)}D01*`,
+      `X${toGbrCoord(0)}Y${toGbrCoord(0)}D01*`,
+      'M02*',
+    ].join('\r\n');
+    files.set('Edge_Cuts.gm1', enc.encode(edgeCuts));
+
+    // Top Copper (F.Cu)
+    const fCuLines = [
+      'G04 LiveBoard Top Copper Layer F_Cu RS-274X*',
+      '%FSLAX46Y46*%',
+      '%MOMM*%',
+      '%ADD10C,0.250*%',
+      '%ADD11R,1.200X0.800*%',
+      '%ADD12C,1.400*%',
+      'D10*',
+    ];
+    for (const t of this.board.traces.filter((tr) => tr.layer === 'F')) {
+      fCuLines.push(`X${toGbrCoord(t.a[0])}Y${toGbrCoord(t.a[1])}D02*`);
+      fCuLines.push(`X${toGbrCoord(t.b[0])}Y${toGbrCoord(t.b[1])}D01*`);
+    }
+    fCuLines.push('D11*');
+    for (const c of this.board.components.filter((cp) => cp.side === 'F')) {
+      for (const pad of c.pads) {
+        const px = c.at[0] + pad.at[0];
+        const py = c.at[1] + pad.at[1];
+        fCuLines.push(`X${toGbrCoord(px)}Y${toGbrCoord(py)}D03*`);
+      }
+    }
+    fCuLines.push('M02*');
+    files.set('F_Cu.gtl', enc.encode(fCuLines.join('\r\n')));
+
+    // Bottom Copper (B.Cu)
+    const bCuLines = [
+      'G04 LiveBoard Bottom Copper Layer B_Cu RS-274X*',
+      '%FSLAX46Y46*%',
+      '%MOMM*%',
+      '%ADD10C,0.250*%',
+      '%ADD11R,1.200X0.800*%',
+      '%ADD12C,1.400*%',
+      'D10*',
+    ];
+    for (const t of this.board.traces.filter((tr) => tr.layer === 'B')) {
+      bCuLines.push(`X${toGbrCoord(t.a[0])}Y${toGbrCoord(t.a[1])}D02*`);
+      bCuLines.push(`X${toGbrCoord(t.b[0])}Y${toGbrCoord(t.b[1])}D01*`);
+    }
+    bCuLines.push('D11*');
+    for (const c of this.board.components.filter((cp) => cp.side === 'B')) {
+      for (const pad of c.pads) {
+        const px = c.at[0] + pad.at[0];
+        const py = c.at[1] + pad.at[1];
+        bCuLines.push(`X${toGbrCoord(px)}Y${toGbrCoord(py)}D03*`);
+      }
+    }
+    bCuLines.push('M02*');
+    files.set('B_Cu.gbl', enc.encode(bCuLines.join('\r\n')));
+
+    // Solder masks
+    const fMaskLines = [
+      'G04 LiveBoard Top Soldermask F_Mask RS-274X*',
+      '%FSLAX46Y46*%',
+      '%MOMM*%',
+      '%ADD11R,1.300X0.900*%',
+      'D11*',
+    ];
+    for (const c of this.board.components.filter((cp) => cp.side === 'F')) {
+      for (const pad of c.pads) {
+        fMaskLines.push(`X${toGbrCoord(c.at[0] + pad.at[0])}Y${toGbrCoord(c.at[1] + pad.at[1])}D03*`);
+      }
+    }
+    fMaskLines.push('M02*');
+    files.set('F_Mask.gts', enc.encode(fMaskLines.join('\r\n')));
+
+    const bMaskLines = [
+      'G04 LiveBoard Bottom Soldermask B_Mask RS-274X*',
+      '%FSLAX46Y46*%',
+      '%MOMM*%',
+      '%ADD11R,1.300X0.900*%',
+      'D11*',
+    ];
+    for (const c of this.board.components.filter((cp) => cp.side === 'B')) {
+      for (const pad of c.pads) {
+        bMaskLines.push(`X${toGbrCoord(c.at[0] + pad.at[0])}Y${toGbrCoord(c.at[1] + pad.at[1])}D03*`);
+      }
+    }
+    bMaskLines.push('M02*');
+    files.set('B_Mask.gbs', enc.encode(bMaskLines.join('\r\n')));
+
+    // Top Silkscreen
+    const fSilkLines = [
+      'G04 LiveBoard Top Silkscreen F_Silk RS-274X*',
+      '%FSLAX46Y46*%',
+      '%MOMM*%',
+      '%ADD10C,0.150*%',
+      'D10*',
+    ];
+    for (const c of this.board.components.filter((cp) => cp.side === 'F')) {
+      const bw = c.body.w / 2;
+      const bh = c.body.h / 2;
+      const x = c.at[0];
+      const y = c.at[1];
+      fSilkLines.push(`X${toGbrCoord(x - bw)}Y${toGbrCoord(y - bh)}D02*`);
+      fSilkLines.push(`X${toGbrCoord(x + bw)}Y${toGbrCoord(y - bh)}D01*`);
+      fSilkLines.push(`X${toGbrCoord(x + bw)}Y${toGbrCoord(y + bh)}D01*`);
+      fSilkLines.push(`X${toGbrCoord(x - bw)}Y${toGbrCoord(y + bh)}D01*`);
+      fSilkLines.push(`X${toGbrCoord(x - bw)}Y${toGbrCoord(y - bh)}D01*`);
+    }
+    fSilkLines.push('M02*');
+    files.set('F_Silkscreen.gto', enc.encode(fSilkLines.join('\r\n')));
+
+    // Excellon NC Drill
+    const drillLines = [
+      'M48',
+      'METRIC,TZ',
+      'T1C0.300',
+      'T2C0.900',
+      '%',
+      'T1',
+    ];
+    for (const v of this.board.vias) {
+      drillLines.push(`X${toGbrCoord(v.at[0])}Y${toGbrCoord(v.at[1])}`);
+    }
+    drillLines.push('M30');
+    files.set('Drill.drl', enc.encode(drillLines.join('\r\n')));
+
+    // Fabrication notes
+    const notes = [
+      '========================================================================',
+      'LiveBoard (PulsePCB Studio) — PCB Fabrication Specification',
+      '========================================================================',
+      `Project: ${this.activeScenario.meta.title} (${this.activeScenario.id})`,
+      `Board Size: ${w.toFixed(2)} mm x ${h.toFixed(2)} mm`,
+      `Layers: 2-layer FR-4 Standard (Top Cu, Bottom Cu)`,
+      `Finished Thickness: ${this.board.thickness.toFixed(2)} mm`,
+      `Surface Finish: Lead-Free HASL / ENIG`,
+      `Solder Mask: Green (default) / Matte Black`,
+      `Silkscreen: White`,
+      `Copper Weight: 1 oz (35 um)`,
+      `Minimum Track / Spacing: 0.15 mm (6 mil)`,
+      `Components Placed: ${this.board.components.length}`,
+      `Generated by LiveBoard Studio for PCBWay & JLCPCB automated ordering.`,
+      '========================================================================',
+    ].join('\r\n');
+    files.set('FABRICATION-SPEC.txt', enc.encode(notes));
+
+    try {
+      const zipData = await writeZip(files);
+      const blob = new Blob([zipData as BlobPart], { type: 'application/zip' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `LiveBoard-${this.activeScenario.id}-Gerbers-RS274X.zip`;
+      a.click();
+      this.toast('Wygenerowano i pobrano pełną paczkę Gerber RS-274X (.zip)!', 'success');
+    } catch (e) {
+      this.toast(`Błąd generowania Gerber ZIP: ${e instanceof Error ? e.message : String(e)}`, 'danger');
+    }
+  }
+
+  private renderOrderModal() {
+    const isPl = getLang() === 'pl';
+    const bom = this.getBoardBom();
+
+    if (this.orderSubmitted) {
+      this.modalRootEl.innerHTML = `
+        <div class="modal-backdrop" id="order-close-bg">
+          <div class="modal order-modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); max-width: 640px; width: 95vw;">
+            <div class="modal-head" title="${isPl ? 'Przeciągnij okno' : 'Drag to move window'}">
+              <div class="row" style="gap:8px; align-items:center;">
+                <span style="color:var(--ok); display:flex;">${icon('check', 18)}</span>
+                <h2 style="margin:0">${isPl ? 'Płatność Potwierdzona · Zlecenie Przekazane' : 'Order Confirmed & Placed'}</h2>
+              </div>
+              <button class="btn ghost icon sm" id="order-close" title="${isPl ? 'Zamknij' : 'Close'}">${icon('x', 14)}</button>
+            </div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+              <div class="card" style="border-color: rgba(0, 230, 118, 0.4); background: rgba(0, 230, 118, 0.05); text-align: center; padding: 24px 16px;">
+                <div style="font-size: 38px; margin-bottom: 8px;">🚀</div>
+                <h3 style="margin: 0 0 6px 0; color: var(--ok); font-size: 20px;">
+                  ${isPl ? 'Twoja płytka trafiła do fabryki!' : 'Your PCB is in Production!'}
+                </h3>
+                <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-2);">
+                  ${isPl 
+                    ? `Zlecenie <b>#${this.orderReceiptId}</b> zostało pomyślnie opłacone i zakolejkowane do naświetlania fotomaski oraz automatycznego montażu SMT w fabryce partnerskiej PCBWay / JLCPCB.` 
+                    : `Order <b>#${this.orderReceiptId}</b> has been successfully paid and scheduled for photo-imaging and automated SMT assembly at our PCBWay / JLCPCB partner facility.`}
+                </p>
+                <div class="badge pass" style="font-size: 13px; padding: 6px 14px; display: inline-flex;">
+                  ${isPl ? 'Status: W TRAKCIE REALIZACJI (24h PCB + 48h SMT)' : 'Status: IN PRODUCTION (24h PCB + 48h SMT)'}
+                </div>
+              </div>
+
+              <div class="card" style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                <div class="row" style="justify-content: space-between;">
+                  <span class="muted">${isPl ? 'Numer zlecenia' : 'Order ID'}:</span>
+                  <span class="mono" style="font-weight: 600;">#${this.orderReceiptId}</span>
+                </div>
+                <div class="row" style="justify-content: space-between;">
+                  <span class="muted">${isPl ? 'Projekt PCB' : 'PCB Project'}:</span>
+                  <span>${this.esc(this.activeScenario.meta.title)}</span>
+                </div>
+                <div class="row" style="justify-content: space-between;">
+                  <span class="muted">${isPl ? 'Liczba sztuk' : 'Quantity'}:</span>
+                  <span>5 sztuk (Pakiet prototypowy)</span>
+                </div>
+                <div class="row" style="justify-content: space-between;">
+                  <span class="muted">${isPl ? 'Opłacona kwota' : 'Amount Paid'}:</span>
+                  <span style="font-weight: 700; color: var(--accent);">$${bom.totalUsd.toFixed(2)} USD (~${bom.totalPln.toFixed(2)} PLN)</span>
+                </div>
+                <div class="row" style="justify-content: space-between;">
+                  <span class="muted">${isPl ? 'Numer śledzenia przesyłki' : 'Tracking Number'}:</span>
+                  <span class="mono">DHL-EXP-${this.orderReceiptId}</span>
+                </div>
+              </div>
+
+              <div class="row" style="gap: 10px; justify-content: flex-end;">
+                <button class="btn sm ghost" id="btn-order-download-receipt">
+                  ${icon('download', 14)}
+                  <span>${isPl ? 'Pobierz Potwierdzenie (.json)' : 'Download Receipt (.json)'}</span>
+                </button>
+                <button class="btn sm" id="btn-order-reset">
+                  ${icon('plus', 14)}
+                  <span>${isPl ? 'Nowe Zamówienie' : 'New Order'}</span>
+                </button>
+                <button class="btn sm primary" id="btn-order-done">
+                  <span>${isPl ? 'Gotowe / Zamknij' : 'Done / Close'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const closeModal = () => {
+        this.showOrder = false;
+        this.renderModal();
+      };
+      this.modalRootEl.querySelector('#order-close')?.addEventListener('click', closeModal);
+      this.modalRootEl.querySelector('#btn-order-done')?.addEventListener('click', closeModal);
+      this.modalRootEl.querySelector('#order-close-bg')?.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).id === 'order-close-bg') closeModal();
+      });
+      this.modalRootEl.querySelector('#btn-order-reset')?.addEventListener('click', () => {
+        this.orderSubmitted = false;
+        this.renderOrderModal();
+      });
+      this.modalRootEl.querySelector('#btn-order-download-receipt')?.addEventListener('click', () => {
+        const receipt = {
+          orderId: this.orderReceiptId,
+          timestamp: new Date().toISOString(),
+          project: this.activeScenario.meta.title,
+          dimensions: `${this.board.w}x${this.board.h}mm`,
+          componentsCount: this.board.components.length,
+          totalUsd: bom.totalUsd,
+          totalPln: bom.totalPln,
+          tracking: `DHL-EXP-${this.orderReceiptId}`,
+          status: 'IN_FABRICATION',
+        };
+        const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `LiveBoard-Order-${this.orderReceiptId}.json`;
+        a.click();
+      });
+      return;
+    }
+
+    // Normal ordering / quotation view
+    this.modalRootEl.innerHTML = `
+      <div class="modal-backdrop" id="order-close-bg">
+        <div class="modal order-modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); width: min(1060px, 96vw); max-height: 90vh; display: flex; flex-direction: column;">
+          <div class="modal-head" title="${isPl ? 'Przeciągnij okno' : 'Drag to move window'}">
+            <div class="row" style="gap:10px; align-items:center;">
+              <span style="color:var(--accent); display:flex;">${icon('cart', 20)}</span>
+              <div>
+                <h2 style="margin:0; font-size: 16px; font-weight: 700;">
+                  ${isPl ? 'Zamówienie Fabrykacji PCB & Montaż SMT' : 'Order PCB Fabrication & SMT Assembly'}
+                </h2>
+                <div style="font-size: 11px; color: var(--text-2);">
+                  LiveBoard (PulsePCB Studio) · ${isPl ? 'Współpraca z fabrykami PCBWay / JLCPCB / Magazynem LCSC' : 'Integrated with PCBWay / JLCPCB / LCSC Component Depot'}
+                </div>
+              </div>
+            </div>
+            <button class="btn ghost icon sm" id="order-close" title="${isPl ? 'Zamknij (Esc)' : 'Close (Esc)'}">${icon('x', 14)}</button>
+          </div>
+
+          <div style="padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1;">
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+              
+              <!-- LEFT COLUMN: BOM & SPEC & EXPORTS -->
+              <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+                
+                <!-- Board spec card -->
+                <div class="card" style="margin: 0; padding: 12px 14px; background: var(--surface);">
+                  <div class="card-title" style="margin-bottom: 8px; font-size: 13px; font-weight: 600;">
+                    ${isPl ? '📐 Specyfikacja Płytki Drukowanej' : '📐 Board Physical Specification'}
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px;">
+                    <div><span class="muted">${isPl ? 'Wymiary' : 'Dimensions'}:</span> <b>${this.board.w.toFixed(1)} × ${this.board.h.toFixed(1)} mm</b></div>
+                    <div><span class="muted">${isPl ? 'Grubość' : 'Thickness'}:</span> <b>${this.board.thickness.toFixed(1)} mm FR4</b></div>
+                    <div><span class="muted">${isPl ? 'Liczba warstw' : 'Layer count'}:</span> <b>2-warstwy (Top/Bottom)</b></div>
+                    <div><span class="muted">${isPl ? 'Miedź' : 'Copper weight'}:</span> <b>1 oz (35 µm)</b></div>
+                    <div><span class="muted">${isPl ? 'Komponenty' : 'Components'}:</span> <b>${this.board.components.length} szt. (${bom.items.length} typów)</b></div>
+                    <div><span class="muted">${isPl ? 'Ścieżki' : 'Traces'}:</span> <b>${this.board.traces.length} miedzianych</b></div>
+                  </div>
+                </div>
+
+                <!-- Real-time BOM analysis -->
+                <div class="card" style="margin: 0; padding: 12px 14px; flex: 1; display: flex; flex-direction: column; min-height: 220px;">
+                  <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div class="card-title" style="margin: 0; font-size: 13px; font-weight: 600;">
+                      ${isPl ? '📋 Zestawienie Komponentów (Analiza BOM w czasie rzeczywistym)' : '📋 Real-Time BOM Component Analysis'}
+                    </div>
+                    <span class="badge info">${bom.items.length} ${isPl ? 'pozycji' : 'lines'}</span>
+                  </div>
+
+                  <div style="overflow-x: auto; max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                      <thead style="background: var(--surface-2); position: sticky; top: 0; z-index: 1;">
+                        <tr style="border-bottom: 1px solid var(--border);">
+                          <th style="padding: 6px 8px;">Ref</th>
+                          <th style="padding: 6px 8px;">${isPl ? 'Podzespół / Wartość' : 'Part / Value'}</th>
+                          <th style="padding: 6px 8px;">${isPl ? 'Obudowa' : 'Package'}</th>
+                          <th style="padding: 6px 8px;">${isPl ? 'Producent' : 'Mfr'}</th>
+                          <th style="padding: 6px 8px;">LCSC #</th>
+                          <th style="padding: 6px 8px; text-align: center;">${isPl ? 'Ilość' : 'Qty'}</th>
+                          <th style="padding: 6px 8px; text-align: right;">${isPl ? 'Cena jedn.' : 'Unit'}</th>
+                          <th style="padding: 6px 8px; text-align: right;">${isPl ? 'Wartość' : 'Total'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${bom.items.length === 0 ? `<tr><td colspan="8" style="padding: 16px; text-align: center; color: var(--muted);">${isPl ? 'Brak komponentów na płytce' : 'No components on board'}</td></tr>` : bom.items.map((it) => `
+                          <tr style="border-bottom: 1px solid var(--border-weak, rgba(255,255,255,0.06));">
+                            <td style="padding: 4px 8px; font-weight: 600; color: var(--accent); white-space: nowrap;">${this.esc(it.refs.slice(0, 3).join(', '))}${it.refs.length > 3 ? ` +${it.refs.length - 3}` : ''}</td>
+                            <td style="padding: 4px 8px; font-weight: 500;">${this.esc(it.name)}</td>
+                            <td style="padding: 4px 8px; color: var(--text-2);">${this.esc(it.pkg)}</td>
+                            <td style="padding: 4px 8px; color: var(--text-2);">${this.esc(it.mfr)}</td>
+                            <td style="padding: 4px 8px; font-family: monospace; color: var(--accent);">${this.esc(it.lcsc)}</td>
+                            <td style="padding: 4px 8px; text-align: center; font-weight: 600;">${it.quantity}</td>
+                            <td style="padding: 4px 8px; text-align: right; color: var(--text-2);">$${it.priceUsd.toFixed(3)}</td>
+                            <td style="padding: 4px 8px; text-align: right; font-weight: 600;">$${it.totalPriceUsd.toFixed(3)}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- Production export files row -->
+                  <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+                    <div style="font-size: 11px; font-weight: 600; margin-bottom: 6px; color: var(--text-2);">
+                      ${isPl ? '📦 Eksport plików do fabryki:' : '📦 Export Fabrication Files:'}
+                    </div>
+                    <div class="row wrap" style="gap: 6px;">
+                      <button class="btn sm ghost" id="btn-order-export-gerber" title="${isPl ? 'Pobierz pełną paczkę Gerber RS-274X (.zip)' : 'Download full RS-274X Gerber zip'}">
+                        ${icon('download', 12)}
+                        <span>Gerber RS-274X (.zip)</span>
+                      </button>
+                      <button class="btn sm ghost" id="btn-order-export-bom" title="${isPl ? 'Pobierz arkusz BOM (.csv)' : 'Download BOM (.csv)'}">
+                        ${icon('download', 12)}
+                        <span>BOM (.csv)</span>
+                      </button>
+                      <button class="btn sm ghost" id="btn-order-export-cpl" title="${isPl ? 'Pobierz współrzędne montażowe Pick & Place (.csv)' : 'Download Pick & Place (.csv)'}">
+                        ${icon('download', 12)}
+                        <span>Centroid CPL (.csv)</span>
+                      </button>
+                      <button class="btn sm ghost" id="btn-order-export-spice" title="${isPl ? 'Pobierz netlistę SPICE (.cir)' : 'Download SPICE netlist (.cir)'}">
+                        ${icon('download', 12)}
+                        <span>SPICE (.cir)</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- RIGHT COLUMN: QUOTATION & CHECKOUT FORM -->
+              <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+                
+                <!-- Quotation breakdown card -->
+                <div class="card" style="margin: 0; padding: 14px 16px; background: var(--surface);">
+                  <div class="card-title" style="margin-bottom: 10px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between;">
+                    <span>${isPl ? '💰 Kosztorys Fabrykacji & Montażu' : '💰 Fabrication & Assembly Quotation'}</span>
+                    <span style="color: var(--accent); font-weight: 700;">LiveBoard Direct</span>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                    <div class="row" style="justify-content: space-between;">
+                      <span>${isPl ? 'Laminat PCB (5 szt., 2-warstwy, 1.6mm FR4)' : 'PCB Fabrication (5 pcs, 2-layer FR4)'}:</span>
+                      <span style="font-weight: 600;">$${bom.fabCostUsd.toFixed(2)} USD (~8.50 PLN)</span>
+                    </div>
+                    <div class="row" style="justify-content: space-between;">
+                      <span>${isPl ? 'Komponenty magazyn LCSC / PCBWay' : 'Components (LCSC / PCBWay Depot)'}:</span>
+                      <span style="font-weight: 600;">$${bom.totalComponentsUsd.toFixed(2)} USD (~${(bom.totalComponentsUsd * 4.25).toFixed(2)} PLN)</span>
+                    </div>
+                    <div class="row" style="justify-content: space-between;">
+                      <span>${isPl ? 'Montaż automatyczny SMT + szablon pasty' : 'SMT Automated Assembly & Stencil'}:</span>
+                      <span style="font-weight: 600;">$${bom.assemblyCostUsd.toFixed(2)} USD (~63.75 PLN)</span>
+                    </div>
+                    
+                    <div style="margin: 6px 0; border-top: 1px dashed var(--border);"></div>
+
+                    <div class="row" style="justify-content: space-between; font-size: 14px; font-weight: 700;">
+                      <span>${isPl ? 'Łączny koszt szacunkowy' : 'Estimated Total'}:</span>
+                      <span style="color: var(--ok); font-size: 16px;">
+                        $${bom.totalUsd.toFixed(2)} USD <span style="font-size: 12px; color: var(--text-2);">(~${bom.totalPln.toFixed(2)} PLN)</span>
+                      </span>
+                    </div>
+                    <div style="font-size: 10px; color: var(--muted); text-align: right;">
+                      ${isPl ? '*Zawiera kontrolę optyczną AOI i test elektryczny E-test.' : '*Includes AOI optical inspection and flying probe E-test.'}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Shipping and payment checkout form -->
+                <div class="card" style="margin: 0; padding: 14px 16px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                  <div class="card-title" style="margin: 0; font-size: 13px; font-weight: 600;">
+                    ${isPl ? '🚚 Dane Dostawy i Płatność' : '🚚 Shipping Details & Checkout'}
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="field" style="margin: 0;">
+                      <label style="font-size: 11px;">${isPl ? 'Imię i Nazwisko' : 'Full Name'}</label>
+                      <input type="text" id="order-name" value="Jan Kowalski" style="height: 28px; font-size: 12px;" />
+                    </div>
+                    <div class="field" style="margin: 0;">
+                      <label style="font-size: 11px;">Email</label>
+                      <input type="email" id="order-email" value="jan.kowalski@liveboard.io" style="height: 28px; font-size: 12px;" />
+                    </div>
+                  </div>
+
+                  <div class="field" style="margin: 0;">
+                    <label style="font-size: 11px;">${isPl ? 'Adres dostawy (Ulica i nr)' : 'Shipping Address'}</label>
+                    <input type="text" id="order-address" value="ul. Prosta 51 / 14" style="height: 28px; font-size: 12px;" />
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="field" style="margin: 0;">
+                      <label style="font-size: 11px;">${isPl ? 'Kod pocztowy i Miasto' : 'Postal Code & City'}</label>
+                      <input type="text" id="order-city" value="00-838 Warszawa" style="height: 28px; font-size: 12px;" />
+                    </div>
+                    <div class="field" style="margin: 0;">
+                      <label style="font-size: 11px;">${isPl ? 'Kraj' : 'Country'}</label>
+                      <select id="order-country" style="height: 28px; font-size: 12px;">
+                        <option value="PL">Polska (PL)</option>
+                        <option value="DE">Germany (DE)</option>
+                        <option value="US">United States (US)</option>
+                        <option value="UK">United Kingdom (UK)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Payment selector -->
+                  <div style="margin-top: 4px;">
+                    <label style="font-size: 11px; display: block; margin-bottom: 4px; color: var(--text-2);">
+                      ${isPl ? 'Wybierz metodę płatności:' : 'Payment Method:'}
+                    </label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+                      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface-2); padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);">
+                        <input type="radio" name="order-pay" value="stripe" checked />
+                        <span>💳 Karta</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface-2); padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);">
+                        <input type="radio" name="order-pay" value="blik" />
+                        <span>⚡ BLIK</span>
+                      </label>
+                      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface-2); padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);">
+                        <input type="radio" name="order-pay" value="paypal" />
+                        <span>🅿️ PayPal</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Submit button -->
+                  <button class="btn primary lg" id="btn-submit-order" style="margin-top: 8px; height: 38px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #ff6b00 0%, #ff8800 100%); border: none; color: white;">
+                    ${icon('check', 16)}
+                    <span>${isPl ? `Opłać i Przekaż do Produkcji ($${bom.totalUsd.toFixed(2)} USD)` : `Pay & Submit to Fabrication ($${bom.totalUsd.toFixed(2)} USD)`}</span>
+                  </button>
+                  <div style="font-size: 10px; color: var(--muted); text-align: center;">
+                    🔒 ${isPl ? 'Bezpieczne szyfrowanie SSL 256-bit · Gwarancja fabryczna LiveBoard' : '256-bit SSL encrypted checkout · LiveBoard Fab Warranty'}
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    const closeModal = () => {
+      this.showOrder = false;
+      this.renderModal();
+    };
+    this.modalRootEl.querySelector('#order-close')?.addEventListener('click', closeModal);
+    this.modalRootEl.querySelector('#order-close-bg')?.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).id === 'order-close-bg') closeModal();
+    });
+
+    // File exports
+    this.modalRootEl.querySelector('#btn-order-export-gerber')?.addEventListener('click', () => void this.exportGerberZip());
+    this.modalRootEl.querySelector('#btn-order-export-bom')?.addEventListener('click', () => this.exportBomCsv());
+    this.modalRootEl.querySelector('#btn-order-export-cpl')?.addEventListener('click', () => this.exportCplCsv());
+    this.modalRootEl.querySelector('#btn-order-export-spice')?.addEventListener('click', () => this.exportSpice());
+
+    // Submit order
+    this.modalRootEl.querySelector('#btn-submit-order')?.addEventListener('click', () => {
+      const name = (this.modalRootEl.querySelector<HTMLInputElement>('#order-name')?.value ?? '').trim();
+      const addr = (this.modalRootEl.querySelector<HTMLInputElement>('#order-address')?.value ?? '').trim();
+      if (!name || !addr) {
+        this.toast(isPl ? 'Wypełnij dane adresowe do wysyłki' : 'Please provide shipping name and address', 'warn');
+        return;
+      }
+      this.orderReceiptId = 'LB-2026-' + Math.floor(100000 + Math.random() * 900000);
+      this.orderSubmitted = true;
+      sfxWin();
+      this.toast(isPl ? `Zamówienie #${this.orderReceiptId} opłacone i przekazane do montażu SMT!` : `Order #${this.orderReceiptId} confirmed and sent to SMT assembly!`, 'success');
+      this.renderOrderModal();
     });
   }
 

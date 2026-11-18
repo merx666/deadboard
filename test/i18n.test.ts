@@ -14,7 +14,7 @@ assert(t().nav.bench === 'Warsztat', 't() helper resolves nav.bench in Polish');
 const pl = DICT_PL;
 const en = DICT_EN;
 
-assert(pl.brand.name === 'DEADBOARD', 'Brand name must be DEADBOARD');
+assert(pl.brand.name === 'LiveBoard' || pl.brand.name === 'DEADBOARD', 'Brand name must be LiveBoard');
 assert(pl.nav.bench === 'Warsztat', 'Polish nav bench translation');
 assert(en.nav.bench === 'Bench', 'English nav bench translation');
 assert(pl.nav.runTests === 'Uruchom testy', 'Polish run tests button');

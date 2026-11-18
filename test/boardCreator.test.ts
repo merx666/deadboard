@@ -1,5 +1,15 @@
 // Unit tests for Custom PCB Board Creator and Scenario Generation
-import { buildCustomScenario, getFootprint, type PlacedComponent, type FaultKind } from '../src/ui/boardCreator';
+import {
+  buildCustomScenario,
+  getFootprint,
+  detectCollisions,
+  getPartEstimatedCost,
+  generateBomCsv,
+  generateCplCsv,
+  getResistorCode,
+  type PlacedComponent,
+  type FaultKind,
+} from '../src/ui/boardCreator';
 import { BOARD_PRESETS } from '../src/boards/presets';
 import { simulateSpice } from '../src/spice/adapter';
 import { buildConnectivity } from '../src/connectivity';
@@ -144,4 +154,41 @@ assert(c99 !== undefined, 'Newly added component C99 exists on board');
 assert(c99.at[0] === 50 && c99.at[1] === 10, 'C99 placed at [50, 10]');
 assert(c99.rot === 180, 'C99 has rotation 180');
 
-console.log('BoardCreator: custom blank PCB generation, component footprints, trace routing, fault injection, and preset customization — ok');
+// 5. Test EIA 3-digit resistor code calculation
+assert(getResistorCode(10000) === '103', '10k ohm resistor has code 103');
+assert(getResistorCode(1000) === '102', '1k ohm resistor has code 102');
+assert(getResistorCode(100000) === '104', '100k ohm resistor has code 104');
+assert(getResistorCode(0) === '000', '0 ohm jumper has code 000');
+
+// 6. Test DFM collision detection
+const noOverlap: PlacedComponent[] = [
+  { id: 'p1', partId: 'res-smd-0805-10k', ref: 'R1', x: 10, y: 10, rotation: 0, name: 'R1' },
+  { id: 'p2', partId: 'res-smd-0805-10k', ref: 'R2', x: 30, y: 30, rotation: 0, name: 'R2' },
+];
+assert(detectCollisions(noOverlap).size === 0, 'Separated components do not collide');
+
+const overlapping: PlacedComponent[] = [
+  { id: 'p1', partId: 'res-smd-0805-10k', ref: 'R1', x: 20, y: 20, rotation: 0, name: 'R1' },
+  { id: 'p2', partId: 'cap-mlcc-0805-100n', ref: 'C1', x: 20.5, y: 20.2, rotation: 0, name: 'C1' },
+];
+const colSet = detectCollisions(overlapping);
+assert(colSet.has('p1') && colSet.has('p2'), 'Overlapping components detected as colliding');
+
+// 7. Test component pricing estimation
+const espPricing = getPartEstimatedCost('esp32-wroom-32d', { id: 'e1', partId: 'esp32-wroom-32d', ref: 'U1', x: 0, y: 0, rotation: 0, name: 'ESP32' });
+assert(espPricing.unitPriceUsd > 2.0 && espPricing.unitPriceUsd < 5.0, 'ESP32 has realistic unit price');
+assert(espPricing.lcsc === 'C473012', 'ESP32 has valid LCSC part number');
+
+const rPricing = getPartEstimatedCost('res-smd-0805-10k', { id: 'r1', partId: 'res-smd-0805-10k', ref: 'R1', x: 0, y: 0, rotation: 0, name: 'R1' });
+assert(rPricing.unitPriceUsd <= 0.05, '0805 Resistor has penny unit price');
+
+// 8. Test BOM and CPL CSV export generation
+const bomCsv = generateBomCsv(customComponents);
+assert(bomCsv.includes('Item,Designator,Quantity,Part Number'), 'BOM CSV header valid');
+assert(bomCsv.includes('J1') && bomCsv.includes('R1') && bomCsv.includes('D1'), 'BOM CSV includes component designators');
+
+const cplCsv = generateCplCsv(customComponents);
+assert(cplCsv.includes('Designator,Mid X,Mid Y,Layer,Rotation'), 'CPL CSV header valid');
+assert(cplCsv.includes('"J1",10.00,25.00,Top,0'), 'CPL CSV contains J1 placement coordinates');
+
+console.log('BoardCreator: custom blank PCB generation, component footprints, trace routing, fault injection, preset customization, collision detection, and production estimator — ok');

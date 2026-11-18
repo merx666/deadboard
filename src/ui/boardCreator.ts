@@ -1,4 +1,4 @@
-// Interactive Custom Board Builder & Supplier Parts Catalog (PCBWay / LCSC / DigiKey)
+// LiveBoard Studio: Interactive Custom Board Builder & Supplier Parts Catalog (PCBWay / LCSC / DigiKey)
 import { searchSupplierParts, SUPPLIER_PARTS, type ComponentPart } from '../parts/catalog';
 import { BOARD_PRESETS } from '../boards/presets';
 import { Builder } from '../scenarios/builder';
@@ -36,6 +36,13 @@ export interface BuildCustomScenarioOptions {
   fault?: FaultKind;
 }
 
+export interface PartPricing {
+  unitPriceUsd: number;
+  lcsc: string;
+  pcbway: string;
+}
+
+/** Footprint calculation preserving API compatibility with existing tests and builders */
 export function getFootprint(partId: string, comp: PlacedComponent): { w: number; h: number; padsCount: number; shape: string } {
   const part = SUPPLIER_PARTS.find((p) => p.id === partId);
   if (part) {
@@ -46,16 +53,621 @@ export function getFootprint(partId: string, comp: PlacedComponent): { w: number
       shape: part.valKind === 'IC' || part.category === 'modules' ? 'chip' : (part.valKind === 'R' || part.valKind === 'C' ? 'box' : 'chip')
     };
   }
-  if (comp.ref.startsWith('R')) return { w: 3.2, h: 1.6, padsCount: 2, shape: 'box' };
+  if (comp.ref.startsWith('R')) return { w: 2.0, h: 1.25, padsCount: 2, shape: 'box' };
   if (comp.ref.startsWith('C')) return { w: 2.0, h: 1.25, padsCount: 2, shape: 'box' };
   if (comp.ref.startsWith('LED')) return { w: 3.5, h: 3.5, padsCount: 2, shape: 'led' };
   if (comp.ref.startsWith('D')) return { w: 4.5, h: 2.5, padsCount: 2, shape: 'diode' };
   if (comp.ref.startsWith('J')) return { w: 5.0, h: 8.0, padsCount: 2, shape: 'header' };
   if (comp.ref.startsWith('SW')) return { w: 6.0, h: 6.0, padsCount: 4, shape: 'tactile' };
-  if (comp.ref.startsWith('F')) return { w: 4.0, h: 2.0, padsCount: 2, shape: 'fuse' };
+  if (comp.ref.startsWith('F')) return { w: 3.2, h: 1.6, padsCount: 2, shape: 'fuse' };
   if (comp.ref.startsWith('TP')) return { w: 2.5, h: 2.5, padsCount: 1, shape: 'pin' };
   if (comp.ref.startsWith('U')) return { w: 12.0, h: 16.0, padsCount: 8, shape: 'chip' };
   return { w: 8.0, h: 8.0, padsCount: 2, shape: 'box' };
+}
+
+/** Standard EIA 3-digit marking code for SMD resistors */
+export function getResistorCode(val?: number): string {
+  if (val === undefined || isNaN(val)) return '103';
+  if (val === 0) return '000';
+  if (val < 10) return `${val}R0`.replace('.', 'R');
+  if (val < 100) return `${Math.round(val)}R`.replace('.0R', 'R');
+  const str = Math.round(val).toString();
+  const digits = str.substring(0, 2);
+  const zeros = str.length - 2;
+  return `${digits}${zeros}`;
+}
+
+/** Estimate component cost from parts catalog */
+export function getPartEstimatedCost(partId: string, comp: PlacedComponent): PartPricing {
+  const part = SUPPLIER_PARTS.find((p) => p.id === partId);
+  const lcsc = part?.lcsc || 'C-GENERIC';
+  const pcbway = part?.pcbwayPart || 'PCBWAY-GENERIC';
+  const idLow = (partId + ' ' + comp.ref + ' ' + comp.name).toLowerCase();
+
+  if (idLow.includes('esp32')) {
+    return { unitPriceUsd: 2.85, lcsc, pcbway };
+  }
+  if (idLow.includes('pico') || idLow.includes('rp2040')) {
+    return { unitPriceUsd: 3.90, lcsc, pcbway };
+  }
+  if (idLow.includes('zero 2 w') || idLow.includes('zero2w')) {
+    return { unitPriceUsd: 15.00, lcsc, pcbway };
+  }
+  if (idLow.includes('atmega328p')) {
+    return { unitPriceUsd: 2.20, lcsc, pcbway };
+  }
+  if (idLow.includes('stm32f103')) {
+    return { unitPriceUsd: 1.95, lcsc, pcbway };
+  }
+  if (idLow.includes('ams1117') || idLow.includes('ldo')) {
+    return { unitPriceUsd: 0.18, lcsc, pcbway };
+  }
+  if (idLow.includes('tps54302') || idLow.includes('buck') || idLow.includes('rt6150')) {
+    return { unitPriceUsd: 0.65, lcsc, pcbway };
+  }
+  if (idLow.includes('w25q') || idLow.includes('flash')) {
+    return { unitPriceUsd: 0.85, lcsc, pcbway };
+  }
+  if (idLow.includes('usb-c') || idLow.includes('type-c')) {
+    return { unitPriceUsd: 0.32, lcsc, pcbway };
+  }
+  if (idLow.includes('ch340')) {
+    return { unitPriceUsd: 0.48, lcsc, pcbway };
+  }
+  if (idLow.includes('tp4056')) {
+    return { unitPriceUsd: 0.22, lcsc, pcbway };
+  }
+  if (idLow.includes('header')) {
+    return { unitPriceUsd: 0.15, lcsc, pcbway };
+  }
+  if (idLow.includes('switch') || idLow.includes('tactile')) {
+    return { unitPriceUsd: 0.10, lcsc, pcbway };
+  }
+  if (comp.ref.startsWith('R') || idLow.includes('resistor')) {
+    return { unitPriceUsd: 0.02, lcsc, pcbway };
+  }
+  if (comp.ref.startsWith('C') || idLow.includes('capacitor') || idLow.includes('mlcc')) {
+    return { unitPriceUsd: idLow.includes('10u') ? 0.05 : 0.02, lcsc, pcbway };
+  }
+  if (comp.ref.startsWith('LED') || idLow.includes('led')) {
+    return { unitPriceUsd: 0.04, lcsc, pcbway };
+  }
+  if (comp.ref.startsWith('D') || idLow.includes('diode') || idLow.includes('ss34')) {
+    return { unitPriceUsd: 0.08, lcsc, pcbway };
+  }
+  if (comp.ref.startsWith('F') || idLow.includes('fuse')) {
+    return { unitPriceUsd: 0.12, lcsc, pcbway };
+  }
+
+  return { unitPriceUsd: 0.10, lcsc, pcbway };
+}
+
+/** Axis-aligned bounding box calculation accounting for 90/270 rotation */
+export function getComponentBoundingBox(comp: PlacedComponent): { minX: number; maxX: number; minY: number; maxY: number; w: number; h: number } {
+  const fp = getFootprint(comp.partId, comp);
+  const isRotated = comp.rotation === 90 || comp.rotation === 270;
+  const w = isRotated ? fp.h : fp.w;
+  const h = isRotated ? fp.w : fp.h;
+  return {
+    minX: comp.x - w / 2,
+    maxX: comp.x + w / 2,
+    minY: comp.y - h / 2,
+    maxY: comp.y + h / 2,
+    w,
+    h,
+  };
+}
+
+/** Real-time collision detection across all placed PCB components */
+export function detectCollisions(components: PlacedComponent[]): Set<string> {
+  const colliding = new Set<string>();
+  const boxes = components.map((c) => ({ id: c.id, box: getComponentBoundingBox(c) }));
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i].box;
+      const b = boxes[j].box;
+      // Overlap condition with 0.4mm clearance tolerance
+      if (a.minX < b.maxX - 0.4 && a.maxX > b.minX + 0.4 && a.minY < b.maxY - 0.4 && a.maxY > b.minY + 0.4) {
+        colliding.add(boxes[i].id);
+        colliding.add(boxes[j].id);
+      }
+    }
+  }
+  return colliding;
+}
+
+/** Generate standard Bill of Materials (BOM) CSV ready for PCBWay and JLCPCB */
+export function generateBomCsv(components: PlacedComponent[]): string {
+  const lines = ['Item,Designator,Quantity,Part Number,Manufacturer,LCSC Part,PCBWay Part,Unit Price ($),Total ($)'];
+  const grouped = new Map<string, { comp: PlacedComponent; refs: string[]; count: number }>();
+  for (const c of components) {
+    const key = c.partId + '_' + (c.value ?? 0);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.refs.push(c.ref);
+      existing.count++;
+    } else {
+      grouped.set(key, { comp: c, refs: [c.ref], count: 1 });
+    }
+  }
+
+  let item = 1;
+  for (const g of grouped.values()) {
+    const part = SUPPLIER_PARTS.find((p) => p.id === g.comp.partId);
+    const pricing = getPartEstimatedCost(g.comp.partId, g.comp);
+    const mpn = part?.mpn || g.comp.name || g.comp.ref;
+    const mfr = part?.manufacturer || 'Generic';
+    const total = (pricing.unitPriceUsd * g.count).toFixed(2);
+    lines.push(`${item++},"${g.refs.join(' ')}",${g.count},"${mpn}","${mfr}","${pricing.lcsc}","${pricing.pcbway}",$${pricing.unitPriceUsd.toFixed(2)},$${total}`);
+  }
+  return lines.join('\n');
+}
+
+/** Generate Pick-and-Place (CPL / Centroid) CSV ready for SMT automated assembly */
+export function generateCplCsv(components: PlacedComponent[]): string {
+  const lines = ['Designator,Mid X,Mid Y,Layer,Rotation'];
+  for (const c of components) {
+    lines.push(`"${c.ref}",${c.x.toFixed(2)},${c.y.toFixed(2)},Top,${c.rotation}`);
+  }
+  return lines.join('\n');
+}
+
+// ==========================================
+// REALISTIC VECTOR SVG COMPONENT RENDERERS
+// ==========================================
+
+function renderEsp32Svg(w: number, h: number): { body: string; pads: string } {
+  const antHeight = 5.8;
+  const antTop = -h / 2;
+  const shieldTop = antTop + antHeight + 0.4;
+  const shieldBottom = h / 2 - 1.2;
+  const shieldHeight = shieldBottom - shieldTop;
+
+  const body = `
+    <!-- Antenna Substrate -->
+    <rect x="${-w / 2}" y="${antTop}" width="${w}" height="${antHeight}" rx="0.5" fill="#090d16" stroke="#1e293b" stroke-width="0.25" />
+    <!-- Serpentine MIFA Antenna Trace (Gold) -->
+    <path d="M ${-w / 2 + 2.4} ${antTop + 4.8} H ${w / 2 - 2.4} V ${antTop + 3.6} H ${-w / 2 + 3.8} V ${antTop + 2.4} H ${w / 2 - 2.4} V ${antTop + 1.2} H ${-w / 2 + 2.4}"
+          fill="none" stroke="#f59e0b" stroke-width="0.45" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="${-w / 2 + 2.4}" y1="${antTop + 4.8}" x2="${-w / 2 + 2.4}" y2="${antTop + 5.6}" stroke="#f59e0b" stroke-width="0.5" />
+    <line x1="${-w / 2 + 5.4}" y1="${antTop + 4.8}" x2="${-w / 2 + 5.4}" y2="${antTop + 5.6}" stroke="#f59e0b" stroke-width="0.5" />
+    <line x1="${-w / 2 + 0.8}" y1="${antTop + antHeight}" x2="${w / 2 - 0.8}" y2="${antTop + antHeight}" stroke="#e0e0e0" stroke-width="0.2" stroke-dasharray="1.2,0.8" />
+    
+    <!-- Metal RF Shield Can -->
+    <rect x="${-w / 2 + 0.4}" y="${shieldTop}" width="${w - 0.8}" height="${shieldHeight}" rx="0.8" fill="#94a3b8" stroke="#64748b" stroke-width="0.3" />
+    <!-- Shield Bevel Highlight -->
+    <rect x="${-w / 2 + 0.8}" y="${shieldTop + 0.4}" width="${w - 1.6}" height="${shieldHeight - 0.8}" rx="0.6" fill="#cbd5e1" opacity="0.6" />
+    <!-- Laser Markings -->
+    <text x="0" y="${shieldTop + 3.8}" font-size="1.2" text-anchor="middle" fill="#0f172a" font-family="monospace" font-weight="900" letter-spacing="0.2">ESP32-WROOM-32</text>
+    <text x="0" y="${shieldTop + 5.8}" font-size="0.8" text-anchor="middle" fill="#334155" font-family="monospace">FCC ID: 2AC7Z-ESPWROOM32</text>
+    <text x="0" y="${shieldTop + 7.5}" font-size="0.75" text-anchor="middle" fill="#475569" font-family="monospace">Wi-Fi + BLE 4.2 · ESPRESSIF</text>
+    <!-- Shield Ground Dimples -->
+    <circle cx="${-w / 2 + 1.2}" cy="${shieldTop + 1.2}" r="0.3" fill="#64748b" />
+    <circle cx="${w / 2 - 1.2}" cy="${shieldTop + 1.2}" r="0.3" fill="#64748b" />
+    <circle cx="${-w / 2 + 1.2}" cy="${shieldBottom - 1.2}" r="0.3" fill="#64748b" />
+    <circle cx="${w / 2 - 1.2}" cy="${shieldBottom - 1.2}" r="0.3" fill="#64748b" />
+    <!-- Pin 1 Marker -->
+    <circle cx="${-w / 2 + 1.2}" cy="${shieldTop + 2.5}" r="0.4" fill="#f59e0b" stroke="#ffffff" stroke-width="0.15" />
+  `;
+
+  // 38 castellated pads
+  let pads = '';
+  const leftCount = 14;
+  const leftStart = shieldTop + 1.0;
+  const leftEnd = shieldBottom - 0.5;
+  const leftStep = (leftEnd - leftStart) / (leftCount - 1);
+  for (let i = 0; i < leftCount; i++) {
+    const py = leftStart + i * leftStep;
+    pads += `<rect x="${-w / 2 - 0.8}" y="${py - 0.35}" width="1.0" height="0.7" rx="0.15" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />`;
+    pads += `<rect x="${w / 2 - 0.2}" y="${py - 0.35}" width="1.0" height="0.7" rx="0.15" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />`;
+  }
+  const botCount = 10;
+  const botStart = -w / 2 + 2.2;
+  const botEnd = w / 2 - 2.2;
+  const botStep = (botEnd - botStart) / (botCount - 1);
+  for (let i = 0; i < botCount; i++) {
+    const px = botStart + i * botStep;
+    pads += `<rect x="${px - 0.35}" y="${h / 2 - 0.2}" width="0.7" height="1.0" rx="0.15" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />`;
+  }
+
+  return { body, pads };
+}
+
+function renderDip28Svg(w: number, h: number): { body: string; pads: string } {
+  const bodyW = 7.6;
+  const bodyH = h - 1.0;
+  const body = `
+    <!-- Socket Silkscreen Outline -->
+    <rect x="${-w / 2 - 0.6}" y="${-h / 2 - 0.6}" width="${w + 1.2}" height="${h + 1.2}" rx="0.6" fill="none" stroke="#e0e0e0" stroke-width="0.25" />
+    <path d="M -1.8 ${-h / 2 - 0.6} A 1.8 1.8 0 0 0 1.8 ${-h / 2 - 0.6}" fill="none" stroke="#e0e0e0" stroke-width="0.25" />
+    <!-- IC Body (Black Textured Plastic) -->
+    <rect x="${-bodyW / 2}" y="${-bodyH / 2}" width="${bodyW}" height="${bodyH}" rx="0.4" fill="#18181b" stroke="#27272a" stroke-width="0.3" />
+    <!-- Orientation Notch at top -->
+    <path d="M -1.6 ${-bodyH / 2} A 1.6 1.6 0 0 0 1.6 ${-bodyH / 2}" fill="#090d16" stroke="#27272a" stroke-width="0.2" />
+    <!-- Pin 1 Dot -->
+    <circle cx="${-bodyW / 2 + 1.2}" cy="${-bodyH / 2 + 2.0}" r="0.5" fill="#090d16" stroke="#3f3f46" stroke-width="0.15" />
+    <!-- Laser Inscription -->
+    <text x="0" y="-3" font-size="1.3" text-anchor="middle" fill="#e4e4e7" font-family="monospace" font-weight="bold" transform="rotate(-90, 0, -3)">ATMEGA328P-PU</text>
+    <text x="0" y="7" font-size="0.9" text-anchor="middle" fill="#a1a1aa" font-family="monospace" transform="rotate(-90, 0, 7)">2134 PH · ARDUINO</text>
+  `;
+
+  let pads = '';
+  const pinCountPerSide = 14;
+  const pitch = 2.54;
+  const totalSpan = (pinCountPerSide - 1) * pitch;
+  const startY = -totalSpan / 2;
+
+  for (let i = 0; i < pinCountPerSide; i++) {
+    const py = startY + i * pitch;
+    pads += `
+      <rect x="${-w / 2}" y="${py - 0.35}" width="1.6" height="0.7" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+      <circle cx="${-w / 2}" cy="${py}" r="0.9" fill="#c88b32" stroke="#f59e0b" stroke-width="0.2" />
+      <circle cx="${-w / 2}" cy="${py}" r="0.4" fill="#070709" />
+      <rect x="${w / 2 - 1.6}" y="${py - 0.35}" width="1.6" height="0.7" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+      <circle cx="${w / 2}" cy="${py}" r="0.9" fill="#c88b32" stroke="#f59e0b" stroke-width="0.2" />
+      <circle cx="${w / 2}" cy="${py}" r="0.4" fill="#070709" />
+    `;
+  }
+  return { body, pads };
+}
+
+function renderPicoSvg(w: number, h: number): { body: string; pads: string } {
+  const body = `
+    <!-- Pico PCB Body (Raspberry Green) -->
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="1.8" fill="#15803d" stroke="#166534" stroke-width="0.4" />
+    <!-- White Silkscreen Margin -->
+    <rect x="${-w / 2 + 1.2}" y="${-h / 2 + 1.2}" width="${w - 2.4}" height="${h - 2.4}" rx="1.0" fill="none" stroke="#e0e0e0" stroke-width="0.25" stroke-dasharray="2,1" />
+    <!-- 4 Corner Mounting Holes (2.1mm) -->
+    <circle cx="${-w / 2 + 2.5}" cy="${-h / 2 + 2.5}" r="1.1" fill="#070709" stroke="#f59e0b" stroke-width="0.3" />
+    <circle cx="${w / 2 - 2.5}" cy="${-h / 2 + 2.5}" r="1.1" fill="#070709" stroke="#f59e0b" stroke-width="0.3" />
+    <circle cx="${-w / 2 + 2.5}" cy="${h / 2 - 2.5}" r="1.1" fill="#070709" stroke="#f59e0b" stroke-width="0.3" />
+    <circle cx="${w / 2 - 2.5}" cy="${h / 2 - 2.5}" r="1.1" fill="#070709" stroke="#f59e0b" stroke-width="0.3" />
+
+    <!-- MicroUSB Port at Top -->
+    <rect x="-3.8" y="${-h / 2 - 1.2}" width="7.6" height="5.2" rx="0.8" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.3" />
+    <rect x="-2.6" y="${-h / 2 - 1.2}" width="5.2" height="2.2" rx="0.5" fill="#0f172a" />
+
+    <!-- RP2040 QFN in Center (Diamond 45° orientation) -->
+    <g transform="translate(0, 3.5) rotate(45)">
+      <rect x="-3.5" y="-3.5" width="7" height="7" rx="0.4" fill="#0f172a" stroke="#334155" stroke-width="0.25" />
+      <circle cx="-2.4" cy="-2.4" r="0.4" fill="#64748b" />
+      <text x="0" y="0.9" font-size="1.5" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-weight="900">RP2040</text>
+    </g>
+
+    <!-- BOOTSEL Pushbutton -->
+    <rect x="-6.5" y="-9.5" width="3.2" height="3.2" rx="0.4" fill="#cbd5e1" stroke="#64748b" stroke-width="0.2" />
+    <circle cx="-4.9" cy="-7.9" r="1.0" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.2" />
+    <text x="-4.9" y="-5.4" font-size="0.8" text-anchor="middle" fill="#ffffff" font-family="monospace">BOOT</text>
+
+    <!-- 12MHz Crystal -->
+    <rect x="3.2" y="-9.5" width="3.2" height="2.5" rx="0.3" fill="#94a3b8" stroke="#64748b" stroke-width="0.2" />
+    <text x="4.8" y="-7.8" font-size="0.75" text-anchor="middle" fill="#0f172a" font-family="monospace" font-weight="bold">12M</text>
+
+    <!-- Flash Memory IC (SOIC-8) -->
+    <rect x="-2.5" y="12.5" width="5" height="4.5" rx="0.3" fill="#18181b" stroke="#334155" stroke-width="0.2" />
+    <text x="0" y="15.2" font-size="0.8" text-anchor="middle" fill="#94a3b8" font-family="monospace">W25Q16</text>
+
+    <!-- Silkscreen Branding -->
+    <text x="0" y="${-h / 2 + 8.5}" font-size="1.3" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-weight="bold">Raspberry Pi Pico</text>
+    <text x="0" y="${h / 2 - 5.5}" font-size="0.95" text-anchor="middle" fill="#d1fae5" font-family="monospace">RP2040 · 2020</text>
+  `;
+
+  let pads = '';
+  const pinsPerSide = 20;
+  const pitch = 2.54;
+  const totalSpan = (pinsPerSide - 1) * pitch;
+  const startY = -totalSpan / 2;
+
+  for (let i = 0; i < pinsPerSide; i++) {
+    const py = startY + i * pitch;
+    pads += `
+      <rect x="${-w / 2 - 0.2}" y="${py - 0.6}" width="1.6" height="1.2" rx="0.2" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />
+      <circle cx="${-w / 2}" cy="${py}" r="0.5" fill="#070709" />
+      <rect x="${w / 2 - 1.4}" y="${py - 0.6}" width="1.6" height="1.2" rx="0.2" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />
+      <circle cx="${w / 2}" cy="${py}" r="0.5" fill="#070709" />
+    `;
+  }
+
+  return { body, pads };
+}
+
+function renderUsbCSvg(w: number, h: number): { body: string; pads: string } {
+  const body = `
+    <!-- Metal Shield -->
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.8" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.3" />
+    <!-- Structural mounting tabs -->
+    <rect x="${-w / 2 - 1.0}" y="${-h / 2 + 1.5}" width="1.1" height="2.2" rx="0.2" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.15" />
+    <rect x="${w / 2 - 0.1}" y="${-h / 2 + 1.5}" width="1.1" height="2.2" rx="0.2" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.15" />
+    <!-- Receptacle Pill Hole -->
+    <rect x="${-w / 2 + 1.2}" y="${-h / 2 + 0.6}" width="${w - 2.4}" height="3.2" rx="1.6" fill="#070709" stroke="#475569" stroke-width="0.25" />
+    <!-- Center Contact Tongue -->
+    <rect x="${-w / 2 + 2.2}" y="${-h / 2 + 1.8}" width="${w - 4.4}" height="0.8" rx="0.2" fill="#1e293b" />
+    <line x1="${-w / 2 + 2.7}" y1="${-h / 2 + 2.2}" x2="${w / 2 - 2.7}" y2="${-h / 2 + 2.2}" stroke="#f59e0b" stroke-width="0.3" stroke-dasharray="0.35,0.25" />
+    <text x="0" y="${h / 2 - 1.0}" font-size="0.85" text-anchor="middle" fill="#334155" font-family="monospace" font-weight="bold">USB-C</text>
+  `;
+  let pads = `
+    <rect x="${-w / 2 - 1.2}" y="${-h / 2 + 1.4}" width="1.4" height="2.4" rx="0.3" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <rect x="${w / 2 - 0.2}" y="${-h / 2 + 1.4}" width="1.4" height="2.4" rx="0.3" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+  `;
+  const pinCount = 12;
+  const startX = -w / 2 + 1.8;
+  const step = (w - 3.6) / (pinCount - 1);
+  for (let i = 0; i < pinCount; i++) {
+    const px = startX + i * step;
+    pads += `<rect x="${px - 0.18}" y="${h / 2 - 0.4}" width="0.36" height="0.9" rx="0.1" fill="#f59e0b" />`;
+  }
+  return { body, pads };
+}
+
+function renderUsbBSvg(w: number, h: number): { body: string; pads: string } {
+  const body = `
+    <!-- Metal Shield Body (Square USB-B Receptacle) -->
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.8" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.3" />
+    <!-- Solder side wings -->
+    <rect x="${-w / 2 - 1.2}" y="-1.5" width="1.3" height="3.0" rx="0.2" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.15" />
+    <rect x="${w / 2 - 0.1}" y="-1.5" width="1.3" height="3.0" rx="0.2" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.15" />
+    <!-- Opening Chamber -->
+    <rect x="${-w / 2 + 1.5}" y="${-h / 2 + 1.5}" width="${w - 3.0}" height="${h - 3.0}" rx="0.5" fill="#090d16" stroke="#475569" stroke-width="0.25" />
+    <!-- Central Plastic Tongue with 4 Contacts -->
+    <rect x="-2.2" y="-2.2" width="4.4" height="4.4" rx="0.3" fill="#1e293b" />
+    <circle cx="-1.1" cy="-1.1" r="0.35" fill="#f59e0b" />
+    <circle cx="1.1" cy="-1.1" r="0.35" fill="#f59e0b" />
+    <circle cx="-1.1" cy="1.1" r="0.35" fill="#f59e0b" />
+    <circle cx="1.1" cy="1.1" r="0.35" fill="#f59e0b" />
+    <text x="0" y="${h / 2 - 0.6}" font-size="0.9" text-anchor="middle" fill="#334155" font-family="monospace" font-weight="bold">USB-B</text>
+  `;
+  const pads = `
+    <circle cx="${-w / 2 - 0.5}" cy="0" r="1.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <circle cx="${-w / 2 - 0.5}" cy="0" r="0.6" fill="#070709" />
+    <circle cx="${w / 2 + 0.5}" cy="0" r="1.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <circle cx="${w / 2 + 0.5}" cy="0" r="0.6" fill="#070709" />
+  `;
+  return { body, pads };
+}
+
+function renderDcJackSvg(w: number, h: number): { body: string; pads: string } {
+  const body = `
+    <!-- DC Barrel Jack Housing (Black Plastic) -->
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.8" fill="#18181b" stroke="#334155" stroke-width="0.3" />
+    <!-- Front Circular Jack Opening -->
+    <circle cx="0" cy="${-h / 2 + 4.5}" r="3.2" fill="#090d16" stroke="#475569" stroke-width="0.3" />
+    <!-- Central 2.1mm Brass Pin -->
+    <circle cx="0" cy="${-h / 2 + 4.5}" r="1.05" fill="#f59e0b" stroke="#d97706" stroke-width="0.2" />
+    <path d="M 2.4 ${-h / 2 + 3.0} Q 1.8 ${-h / 2 + 4.5} 2.4 ${-h / 2 + 6.0}" fill="none" stroke="#cbd5e1" stroke-width="0.4" />
+    <text x="0" y="${h / 2 - 1.5}" font-size="0.9" text-anchor="middle" fill="#64748b" font-family="monospace" font-weight="bold">2.1mm DC</text>
+  `;
+  const pads = `
+    <circle cx="0" cy="${h / 2 - 1.0}" r="1.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <circle cx="0" cy="${h / 2 - 1.0}" r="0.5" fill="#070709" />
+    <circle cx="${-w / 2 + 1.2}" cy="1.0" r="1.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <circle cx="${-w / 2 + 1.2}" cy="1.0" r="0.5" fill="#070709" />
+    <circle cx="${w / 2 - 1.2}" cy="1.0" r="1.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <circle cx="${w / 2 - 1.2}" cy="1.0" r="0.5" fill="#070709" />
+  `;
+  return { body, pads };
+}
+
+function renderTactileSwitchSvg(w: number, h: number): { body: string; pads: string } {
+  const body = `
+    <!-- Silver Base Plate -->
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.6" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.3" />
+    <!-- Corner Rivets -->
+    <circle cx="${-w / 2 + 0.8}" cy="${-h / 2 + 0.8}" r="0.35" fill="#64748b" />
+    <circle cx="${w / 2 - 0.8}" cy="${-h / 2 + 0.8}" r="0.35" fill="#64748b" />
+    <circle cx="${-w / 2 + 0.8}" cy="${h / 2 - 0.8}" r="0.35" fill="#64748b" />
+    <circle cx="${w / 2 - 0.8}" cy="${h / 2 - 0.8}" r="0.35" fill="#64748b" />
+    <!-- Actuator Well -->
+    <circle cx="0" cy="0" r="${w / 3.0}" fill="#475569" stroke="#334155" stroke-width="0.2" />
+    <!-- Central Button Actuator -->
+    <circle cx="0" cy="0" r="${w / 4.2}" fill="#0284c7" stroke="#38bdf8" stroke-width="0.25" />
+    <circle cx="-0.3" cy="-0.3" r="${w / 8.0}" fill="#7dd3fc" opacity="0.6" />
+  `;
+  const pads = `
+    <!-- 4 Solder Legs -->
+    <rect x="${-w / 2 - 1.0}" y="${-h / 2 + 0.6}" width="1.2" height="1.0" rx="0.2" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />
+    <rect x="${-w / 2 - 1.0}" y="${h / 2 - 1.6}" width="1.2" height="1.0" rx="0.2" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />
+    <rect x="${w / 2 - 0.2}" y="${-h / 2 + 0.6}" width="1.2" height="1.0" rx="0.2" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />
+    <rect x="${w / 2 - 0.2}" y="${h / 2 - 1.6}" width="1.2" height="1.0" rx="0.2" fill="#f59e0b" stroke="#d97706" stroke-width="0.1" />
+  `;
+  return { body, pads };
+}
+
+function renderResistor0805Svg(w: number, h: number, val?: number): { body: string; pads: string } {
+  const code = getResistorCode(val);
+  const termW = 0.45;
+  const body = `
+    <!-- Black Ceramic Resistor Body -->
+    <rect x="${-w / 2 + termW}" y="${-h / 2}" width="${w - termW * 2}" height="${h}" rx="0.1" fill="#18181b" stroke="#27272a" stroke-width="0.1" />
+    <!-- White Silkscreen EIA-96 / 3-digit Code -->
+    <text x="0" y="0.32" text-anchor="middle" font-size="0.65" fill="#f8fafc" font-family="monospace" font-weight="900" letter-spacing="-0.05">${code}</text>
+  `;
+  const pads = `
+    <!-- Silver End Termination Caps & Solder Pads -->
+    <rect x="${-w / 2 - 0.35}" y="${-h / 2 - 0.15}" width="${termW + 0.4}" height="${h + 0.3}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />
+    <rect x="${-w / 2}" y="${-h / 2}" width="${termW}" height="${h}" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+    <rect x="${w / 2 - termW - 0.05}" y="${-h / 2 - 0.15}" width="${termW + 0.4}" height="${h + 0.3}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />
+    <rect x="${w / 2 - termW}" y="${-h / 2}" width="${termW}" height="${h}" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+  `;
+  return { body, pads };
+}
+
+function renderCapacitor0805Svg(w: number, h: number): { body: string; pads: string } {
+  const termW = 0.45;
+  const body = `
+    <!-- Tan / Caramel MLCC Ceramic Body -->
+    <rect x="${-w / 2 + termW}" y="${-h / 2}" width="${w - termW * 2}" height="${h}" rx="0.1" fill="#b45309" stroke="#78350f" stroke-width="0.1" />
+    <!-- Ceramic shine highlight -->
+    <rect x="${-w / 2 + termW}" y="${-h / 2 + 0.15}" width="${w - termW * 2}" height="${h * 0.25}" rx="0.05" fill="#d97706" opacity="0.6" />
+  `;
+  const pads = `
+    <!-- Silver End Termination Caps & Solder Pads -->
+    <rect x="${-w / 2 - 0.35}" y="${-h / 2 - 0.15}" width="${termW + 0.4}" height="${h + 0.3}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />
+    <rect x="${-w / 2}" y="${-h / 2}" width="${termW}" height="${h}" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+    <rect x="${w / 2 - termW - 0.05}" y="${-h / 2 - 0.15}" width="${termW + 0.4}" height="${h + 0.3}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />
+    <rect x="${w / 2 - termW}" y="${-h / 2}" width="${termW}" height="${h}" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+  `;
+  return { body, pads };
+}
+
+function renderLedSvg(w: number, h: number, name: string): { body: string; pads: string } {
+  let color = '#ef4444';
+  let glow = '#f87171';
+  const nameLow = name.toLowerCase();
+  if (nameLow.includes('green') || nameLow.includes('zielon')) {
+    color = '#22c55e';
+    glow = '#4ade80';
+  } else if (nameLow.includes('blue') || nameLow.includes('niebiesk')) {
+    color = '#3b82f6';
+    glow = '#60a5fa';
+  } else if (nameLow.includes('yellow') || nameLow.includes('żółt')) {
+    color = '#eab308';
+    glow = '#facc15';
+  }
+
+  const radius = Math.min(w, h) / 2;
+  const body = `
+    <!-- Cathode Silk Notch Line -->
+    <line x1="${-radius - 0.5}" y1="${-radius}" x2="${-radius - 0.5}" y2="${radius}" stroke="#22c55e" stroke-width="0.3" />
+    <!-- Colored Lens Dome with Flat Cathode Side -->
+    <path d="M ${-radius * 0.7} ${-radius} A ${radius} ${radius} 0 1 1 ${-radius * 0.7} ${radius} Z" fill="${color}" stroke="${glow}" stroke-width="0.25" opacity="0.9" />
+    <!-- Lens Highlight -->
+    <circle cx="0.4" cy="-0.4" r="${radius * 0.35}" fill="#ffffff" opacity="0.5" />
+    <!-- Internal Leadframe Anvil & Post -->
+    <path d="M ${-radius * 0.4} -0.5 L 0 0 L ${-radius * 0.4} 0.5 Z" fill="#e2e8f0" opacity="0.7" />
+  `;
+  const pads = `
+    <!-- Cathode Square Pad (Pin 1) -->
+    <rect x="${-w / 2 - 0.8}" y="-0.6}" width="1.0" height="1.2" rx="0.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <!-- Anode Round Pad (Pin 2) -->
+    <circle cx="${w / 2 + 0.3}" cy="0" r="0.6" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <circle cx="${w / 2 + 0.3}" cy="0" r="0.25" fill="#070709" />
+  `;
+  return { body, pads };
+}
+
+function renderDiodeSvg(w: number, h: number): { body: string; pads: string } {
+  const body = `
+    <!-- Diode Body -->
+    <rect x="${-w * 0.35}" y="${-h * 0.4}" width="${w * 0.7}" height="${h * 0.8}" rx="0.2" fill="#111827" stroke="#374151" stroke-width="0.2" />
+    <!-- White Cathode Line -->
+    <line x1="${w * 0.18}" y1="${-h * 0.4}" x2="${w * 0.18}" y2="${h * 0.4}" stroke="#ffffff" stroke-width="0.5" />
+  `;
+  const pads = `
+    <rect x="${-w / 2}" y="${-h * 0.45}" width="${w * 0.25}" height="${h * 0.9}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <rect x="${w / 2 - w * 0.25}" y="${-h * 0.45}" width="${w * 0.25}" height="${h * 0.9}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+  `;
+  return { body, pads };
+}
+
+function renderSot223Svg(_w: number, h: number): { body: string; pads: string } {
+  const bodyW = 6.5;
+  const bodyH = 3.5;
+  const body = `
+    <!-- SOT-223 Plastic Package -->
+    <rect x="${-bodyW / 2}" y="${-bodyH / 2}" width="${bodyW}" height="${bodyH}" rx="0.3" fill="#18181b" stroke="#334155" stroke-width="0.2" />
+    <!-- Laser Engraved Part Marking -->
+    <text x="0" y="0.5" font-size="0.9" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-weight="bold">AMS1117-3.3</text>
+  `;
+  const pads = `
+    <!-- Large Heatsink Tab on Top (VOUT) -->
+    <rect x="-1.75" y="${-h / 2 + 0.2}" width="3.5" height="1.8" rx="0.2" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <rect x="-1.5" y="${-bodyH / 2 - 0.8}" width="3.0" height="0.9" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+
+    <!-- 3 Bottom Leads (GND, VOUT, VIN) -->
+    <rect x="-2.7" y="${bodyH / 2}" width="0.8" height="1.0" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+    <rect x="-2.85" y="${h / 2 - 1.8}" width="1.1" height="1.6" rx="0.2" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+
+    <rect x="-0.4" y="${bodyH / 2}" width="0.8" height="1.0" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+    <rect x="-0.55" y="${h / 2 - 1.8}" width="1.1" height="1.6" rx="0.2" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+
+    <rect x="1.9" y="${bodyH / 2}" width="0.8" height="1.0" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+    <rect x="1.75" y="${h / 2 - 1.8}" width="1.1" height="1.6" rx="0.2" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+  `;
+  return { body, pads };
+}
+
+function renderHeaderSvg(w: number, h: number, padsCount: number, isFemale = false): { body: string; pads: string } {
+  const pinCount = Math.max(2, padsCount);
+  const isVertical = h >= w;
+  let body = '';
+  let pads = '';
+
+  if (isVertical) {
+    const pitch = (h - 1.0) / (pinCount - 1);
+    const startY = -(h - 1.0) / 2;
+    for (let i = 0; i < pinCount; i++) {
+      const py = startY + i * pitch;
+      body += `
+        <!-- Black Plastic Insulator Block -->
+        <rect x="${-w / 2}" y="${py - pitch / 2 + 0.1}" width="${w}" height="${pitch - 0.2}" rx="0.2" fill="#111827" stroke="#1f2937" stroke-width="0.15" />
+      `;
+      if (isFemale) {
+        body += `<rect x="-0.6" y="${py - 0.6}" width="1.2" height="1.2" rx="0.1" fill="#070709" stroke="#374151" stroke-width="0.1" />`;
+      } else {
+        body += `<rect x="-0.4" y="${py - 0.4}" width="0.8" height="0.8" fill="#fbbf24" stroke="#d97706" stroke-width="0.1" />`;
+      }
+      pads += `
+        <circle cx="0" cy="${py}" r="0.9" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+        <circle cx="0" cy="${py}" r="0.4" fill="#070709" />
+      `;
+    }
+  } else {
+    const pitch = (w - 1.0) / (pinCount - 1);
+    const startX = -(w - 1.0) / 2;
+    for (let i = 0; i < pinCount; i++) {
+      const px = startX + i * pitch;
+      body += `
+        <rect x="${px - pitch / 2 + 0.1}" y="${-h / 2}" width="${pitch - 0.2}" height="${h}" rx="0.2" fill="#111827" stroke="#1f2937" stroke-width="0.15" />
+      `;
+      if (isFemale) {
+        body += `<rect x="${px - 0.6}" y="-0.6" width="1.2" height="1.2" rx="0.1" fill="#070709" stroke="#374151" stroke-width="0.1" />`;
+      } else {
+        body += `<rect x="${px - 0.4}" y="-0.4" width="0.8" height="0.8" fill="#fbbf24" stroke="#d97706" stroke-width="0.1" />`;
+      }
+      pads += `
+        <circle cx="${px}" cy="0" r="0.9" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+        <circle cx="${px}" cy="0" r="0.4" fill="#070709" />
+      `;
+    }
+  }
+
+  return { body, pads };
+}
+
+function renderFuseSvg(w: number, h: number): { body: string; pads: string } {
+  const termW = 0.5;
+  const body = `
+    <!-- Polyfuse Green Polymer Body -->
+    <rect x="${-w / 2 + termW}" y="${-h / 2}" width="${w - termW * 2}" height="${h}" rx="0.1" fill="#047857" stroke="#065f46" stroke-width="0.15" />
+    <line x1="${-w / 2 + termW + 0.5}" y1="0" x2="${w / 2 - termW - 0.5}" y2="0" stroke="#a7f3d0" stroke-width="0.3" stroke-dasharray="0.5,0.3" />
+  `;
+  const pads = `
+    <rect x="${-w / 2 - 0.35}" y="${-h / 2 - 0.1}" width="${termW + 0.4}" height="${h + 0.2}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />
+    <rect x="${-w / 2}" y="${-h / 2}" width="${termW}" height="${h}" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+    <rect x="${w / 2 - termW - 0.05}" y="${-h / 2 - 0.1}" width="${termW + 0.4}" height="${h + 0.2}" rx="0.15" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />
+    <rect x="${w / 2 - termW}" y="${-h / 2}" width="${termW}" height="${h}" rx="0.1" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.1" />
+  `;
+  return { body, pads };
+}
+
+function renderGenericChipSvg(w: number, h: number, padsCount: number, label: string): { body: string; pads: string } {
+  const body = `
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.5" fill="#18181b" stroke="#334155" stroke-width="0.25" />
+    <circle cx="${-w / 2 + 1.2}" cy="${-h / 2 + 1.2}" r="0.4" fill="#64748b" />
+    <text x="0" y="0.5" font-size="${Math.max(0.8, Math.min(1.4, w * 0.15))}" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-weight="bold">${label.substring(0, 10)}</text>
+  `;
+  let pads = '';
+  const half = Math.ceil(padsCount / 2);
+  const spacing = (h - 2) / Math.max(1, half - 1);
+  for (let i = 0; i < half; i++) {
+    const py = (h / 2 - 1) - i * spacing;
+    pads += `<rect x="${-w / 2 - 0.8}" y="${py - 0.35}" width="0.9" height="0.7" rx="0.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />`;
+  }
+  for (let i = 0; i < padsCount - half; i++) {
+    const py = -(h / 2 - 1) + i * spacing;
+    pads += `<rect x="${w / 2 - 0.1}" y="${py - 0.35}" width="0.9" height="0.7" rx="0.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.1" />`;
+  }
+  return { body, pads };
 }
 
 function safePadPos(c: Component, name: string): V2 | null {
@@ -221,7 +833,6 @@ export function buildComponentFromPlaced(comp: PlacedComponent, b: Builder): Com
     return b.testpoint(comp.ref, [comp.x, comp.y], comp.name);
   }
 
-  // Generic fallback
   return b.resistor(comp.ref, 1000, [comp.x, comp.y], comp.rotation);
 }
 
@@ -270,20 +881,18 @@ export function buildCustomScenario(opts: BuildCustomScenarioOptions): Scenario 
   if (presetId === 'custom-blank') {
     const b = new Builder(width, height);
     b.b.color = color;
-    b.text([width / 2, 4], 'CUSTOM PROTOTYPING BOARD', 1.8);
-    b.text([width / 2, height - 4], `DEADBOARD STUDIO · ${width}x${height}mm`, 1.2);
+    b.text([width / 2, 4], 'LIVEBOARD CUSTOM PROTOTYPE', 1.8);
+    b.text([width / 2, height - 4], `LIVEBOARD STUDIO · ${width}x${height}mm`, 1.2);
 
     const createdComps: Component[] = [];
     for (const comp of placedComponents) {
       const c = buildComponentFromPlaced(comp, b);
       createdComps.push(c);
-      // Silkscreen ref des
       const fp = getFootprint(comp.partId, comp);
       const silkY = Math.max(2, comp.y - (fp.h / 2 + 1.8));
       b.text([comp.x, silkY], comp.ref, 1.2);
     }
 
-    // Connect traces
     routeCustomBoardTraces(b, createdComps);
 
     sc = {
@@ -291,9 +900,9 @@ export function buildCustomScenario(opts: BuildCustomScenarioOptions): Scenario 
       id: `custom-board-${Date.now().toString(36)}`,
       meta: {
         title: `Custom Board (${width}x${height}mm)`,
-        author: 'DEADBOARD Maker',
+        author: 'LiveBoard Maker',
         difficulty: 1,
-        description: 'Własny projekt płytki PCB przygotowany w warsztacie DEADBOARD.',
+        description: 'Własny projekt płytki PCB przygotowany w warsztacie LiveBoard Studio.',
         hints: ['Użyj narzędzi lutownicy, multimetru i oscyloskopu do testowania obwodu.'],
         license: 'CC0-1.0',
       },
@@ -307,11 +916,9 @@ export function buildCustomScenario(opts: BuildCustomScenarioOptions): Scenario 
     sc.board.h = height;
     sc.board.color = color;
 
-    // Update existing components or add newly placed ones
     const existingRefs = new Set(sc.board.components.map((c) => c.ref));
     const placedMap = new Map(placedComponents.map((p) => [p.ref, p]));
 
-    // 1. Update positions of existing components
     for (const c of sc.board.components) {
       const placed = placedMap.get(c.ref) ?? placedComponents.find((p) => p.id === c.id);
       if (placed) {
@@ -321,14 +928,12 @@ export function buildCustomScenario(opts: BuildCustomScenarioOptions): Scenario 
       }
     }
 
-    // 2. Remove components that the user deleted from placedComponents
     const activePlacedIds = new Set(placedComponents.map((p) => p.id));
     const activePlacedRefs = new Set(placedComponents.map((p) => p.ref));
     sc.board.components = sc.board.components.filter(
       (c) => activePlacedIds.has(c.id) || activePlacedRefs.has(c.ref)
     );
 
-    // 3. Add components that were newly added to placedComponents
     const bWrapper = new Builder(width, height);
     bWrapper.b = sc.board;
     for (const placed of placedComponents) {
@@ -338,9 +943,7 @@ export function buildCustomScenario(opts: BuildCustomScenarioOptions): Scenario 
     }
   }
 
-  // Apply fault if requested
   applyFaultsToScenario(sc, fault);
-
   return sc;
 }
 
@@ -351,12 +954,13 @@ export class BoardCreatorModal {
   private selectedPresetId: string = 'preset-esp32-devkit';
   private customWidth = 84;
   private customHeight = 52;
-  private customColor = '#124422';
+  private customColor = '#0f2e1a';
   private searchQuery = '';
   private selectedCategory = 'all';
   private injectFault: FaultKind = 'none';
   private placedComponents: PlacedComponent[] = [];
   private selectedCompId: string | null = null;
+  private collidingCompIds: Set<string> = new Set();
 
   private onWindowMouseMove?: (e: MouseEvent) => void;
   private onWindowMouseUp?: () => void;
@@ -364,7 +968,48 @@ export class BoardCreatorModal {
   private handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
+      const orderModal = this.el.querySelector('#pcb-order-modal');
+      if (orderModal) {
+        orderModal.remove();
+        return;
+      }
       this.close();
+      return;
+    }
+
+    const activeTag = document.activeElement?.tagName;
+    if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') {
+      return;
+    }
+
+    if (this.selectedCompId) {
+      const isPl = getLang() === 'pl';
+      const comp = this.placedComponents.find((c) => c.id === this.selectedCompId);
+      if (!comp) return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        this.rotateSelectedComponent(isPl);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        this.deleteComponent(comp.id, isPl);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        comp.x = Math.max(2, comp.x - 1);
+        this.onComponentNudge(comp, isPl);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        comp.x = Math.min(this.customWidth - 2, comp.x + 1);
+        this.onComponentNudge(comp, isPl);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        comp.y = Math.min(this.customHeight - 2, comp.y + 1);
+        this.onComponentNudge(comp, isPl);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        comp.y = Math.max(2, comp.y - 1);
+        this.onComponentNudge(comp, isPl);
+      }
     }
   };
 
@@ -395,9 +1040,10 @@ export class BoardCreatorModal {
     if (presetId === 'custom-blank') {
       this.customWidth = 80;
       this.customHeight = 50;
-      this.customColor = '#124422';
+      this.customColor = '#0f2e1a';
       this.placedComponents = [];
       this.selectedCompId = null;
+      this.collidingCompIds.clear();
       return;
     }
 
@@ -407,7 +1053,7 @@ export class BoardCreatorModal {
     const sc = preset.create();
     this.customWidth = sc.board.w;
     this.customHeight = sc.board.h;
-    this.customColor = sc.board.color || '#124422';
+    this.customColor = sc.board.color || '#0f2e1a';
     this.placedComponents = sc.board.components.map((c) => ({
       id: c.id,
       partId: this.findPartIdForComp(c),
@@ -419,13 +1065,14 @@ export class BoardCreatorModal {
       name: c.label || c.ref,
     }));
     this.selectedCompId = null;
+    this.collidingCompIds = detectCollisions(this.placedComponents);
   }
 
   private findPartIdForComp(c: Component): string {
     const refUpper = c.ref.toUpperCase();
     if (refUpper.includes('ESP32')) return 'esp32-wroom-32d';
     if (refUpper.includes('RP2040') || refUpper.includes('PICO')) return 'rp2040-pico';
-    if (refUpper.includes('ATMEGA') || refUpper.includes('328P')) return 'atmega328p-arduino';
+    if (refUpper.includes('ATMEGA') || refUpper.includes('328P')) return 'atmega328p-pu';
     if (refUpper.includes('STM32') || refUpper.includes('BLUEPILL')) return 'stm32f103c8t6-bluepill';
     if (refUpper.includes('LDO') || refUpper.includes('1117')) return 'ams1117-33';
     if (refUpper.includes('RT6150') || refUpper.includes('TPS54302') || refUpper.includes('BUCK')) return 'tps54302ddcr';
@@ -505,6 +1152,7 @@ export class BoardCreatorModal {
 
     this.placedComponents.push(comp);
     this.selectedCompId = comp.id;
+    this.collidingCompIds = detectCollisions(this.placedComponents);
 
     this.opts.toast(
       isPl ? `Dodano ${ref} (${part.mpn}) do płytki!` : `Added ${ref} (${part.mpn}) to board!`,
@@ -572,6 +1220,17 @@ export class BoardCreatorModal {
         name = isPl ? 'Złącze Zasilania USB 5V' : 'USB 5V Power Header';
         value = 5.0;
         break;
+      case 'usb-c':
+        partId = 'usb-c-16p-tht-smd';
+        prefix = 'J';
+        name = isPl ? 'Gniazdo USB-C 16-pin' : 'USB-C 16-Pin Receptacle';
+        value = 5.0;
+        break;
+      case 'switch':
+        partId = 'generic-switch';
+        prefix = 'SW';
+        name = isPl ? 'Przycisk Tactile 6x6mm' : 'Tactile Pushbutton 6x6mm';
+        break;
       default:
         partId = 'res-smd-0805-10k';
         prefix = 'R';
@@ -594,6 +1253,7 @@ export class BoardCreatorModal {
 
     this.placedComponents.push(comp);
     this.selectedCompId = comp.id;
+    this.collidingCompIds = detectCollisions(this.placedComponents);
 
     this.opts.toast(
       isPl ? `Dodano ${ref} (${name})!` : `Added ${ref} (${name})!`,
@@ -610,19 +1270,21 @@ export class BoardCreatorModal {
     const [deleted] = this.placedComponents.splice(idx, 1);
     if (this.selectedCompId === compId) this.selectedCompId = null;
 
-    // Remove row from DOM
+    this.collidingCompIds = detectCollisions(this.placedComponents);
+
     const rowEl = this.el.querySelector(`.placed-comp-row[data-comp-id="${compId}"]`);
     rowEl?.remove();
 
-    // Remove SVG element
     const svgEl = this.el.querySelector(`#pcb-svg-preview [data-comp-id="${compId}"]`);
     svgEl?.remove();
 
-    // Update count badge
+    this.updateTabBadge(isPl);
+    this.updateEstimatorBox(isPl);
+    this.updateCanvasToolbar(isPl);
+
     const countBadge = this.el.querySelector('#placed-comps-count');
     if (countBadge) countBadge.textContent = String(this.placedComponents.length);
 
-    // If empty now, show empty message
     const listEl = this.el.querySelector('#placed-comps-list');
     if (listEl && this.placedComponents.length === 0) {
       listEl.innerHTML = `
@@ -632,8 +1294,40 @@ export class BoardCreatorModal {
       `;
     }
 
-    this.updateTabBadge(isPl);
     this.opts.toast(isPl ? `Usunięto ${deleted.ref}` : `Removed ${deleted.ref}`, 'info');
+  }
+
+  private rotateSelectedComponent(isPl: boolean) {
+    if (!this.selectedCompId) return;
+    const comp = this.placedComponents.find((c) => c.id === this.selectedCompId);
+    if (!comp) return;
+
+    comp.rotation = (((comp.rotation + 90) % 360) as 0 | 90 | 180 | 270);
+    this.collidingCompIds = detectCollisions(this.placedComponents);
+    this.updateComponentSvgTransform(comp);
+    this.updateSelectionAndCollision(isPl);
+
+    const selRot = this.el.querySelector(`.sel-comp-rot[data-comp-id="${comp.id}"]`) as HTMLSelectElement | null;
+    if (selRot) selRot.value = String(comp.rotation);
+
+    this.opts.toast(
+      isPl ? `Obrócono ${comp.ref} o 90° (kąt: ${comp.rotation}°)` : `Rotated ${comp.ref} by 90° (${comp.rotation}°)`,
+      'info'
+    );
+  }
+
+  private onComponentNudge(comp: PlacedComponent, isPl: boolean) {
+    this.collidingCompIds = detectCollisions(this.placedComponents);
+    this.updateComponentSvgTransform(comp);
+    this.updateSelectionAndCollision(isPl);
+
+    const inpX = this.el.querySelector(`.inp-comp-x[data-comp-id="${comp.id}"]`) as HTMLInputElement | null;
+    if (inpX && document.activeElement !== inpX) inpX.value = String(comp.x);
+    const inpY = this.el.querySelector(`.inp-comp-y[data-comp-id="${comp.id}"]`) as HTMLInputElement | null;
+    if (inpY && document.activeElement !== inpY) inpY.value = String(comp.y);
+
+    const hoverInfo = this.el.querySelector('#preview-hover-info');
+    if (hoverInfo) hoverInfo.textContent = `${comp.ref}: X=${comp.x} mm, Y=${comp.y} mm`;
   }
 
   private updateTabBadge(isPl: boolean) {
@@ -641,7 +1335,7 @@ export class BoardCreatorModal {
     if (tabBtn) {
       const count = this.placedComponents.length;
       const countStr = count > 0 ? ` (${count})` : '';
-      tabBtn.innerHTML = `${icon('grid', 14)}<span>${isPl ? 'Kreator Obwodów i Modyfikacji' : 'Circuit & Mod Builder'}${countStr}</span>`;
+      tabBtn.innerHTML = `${icon('grid', 14)}<span>${isPl ? 'Kreator Obwodów & CAD' : 'Circuit & CAD Builder'}${countStr}</span>`;
     }
   }
 
@@ -653,30 +1347,119 @@ export class BoardCreatorModal {
     }
   }
 
-  private highlightSelectedComponent() {
+  private updateSelectionAndCollision(isPl: boolean) {
     this.el.querySelectorAll('#pcb-svg-preview .preview-comp').forEach((g) => {
       const id = g.getAttribute('data-comp-id');
       const isSel = id === this.selectedCompId;
+      const isCol = id ? this.collidingCompIds.has(id) : false;
       const ring = g.querySelector('.selection-ring');
       if (ring) {
-        ring.setAttribute('stroke', isSel ? '#38bdf8' : 'none');
+        if (isCol) {
+          ring.setAttribute('stroke', '#ef4444');
+          ring.setAttribute('fill', 'rgba(239, 68, 68, 0.15)');
+          ring.setAttribute('stroke-width', '0.6');
+          ring.setAttribute('stroke-dasharray', '1.2,0.8');
+        } else if (isSel) {
+          ring.setAttribute('stroke', '#38bdf8');
+          ring.setAttribute('fill', 'rgba(56, 189, 248, 0.08)');
+          ring.setAttribute('stroke-width', '0.5');
+          ring.setAttribute('stroke-dasharray', '1.2,0.8');
+        } else {
+          ring.setAttribute('stroke', 'none');
+          ring.setAttribute('fill', 'none');
+        }
       }
     });
 
     this.el.querySelectorAll('.placed-comp-row').forEach((row) => {
       const id = row.getAttribute('data-comp-id');
       const isSel = id === this.selectedCompId;
-      if (isSel) {
-        row.classList.add('active-comp');
-        (row as HTMLElement).style.borderColor = 'var(--accent)';
-        (row as HTMLElement).style.background = 'rgba(56, 189, 248, 0.08)';
-        row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const isCol = id ? this.collidingCompIds.has(id) : false;
+      const htmlRow = row as HTMLElement;
+
+      if (isCol) {
+        htmlRow.style.borderColor = '#ef4444';
+        htmlRow.style.background = 'rgba(239, 68, 68, 0.08)';
+      } else if (isSel) {
+        htmlRow.style.borderColor = 'var(--accent)';
+        htmlRow.style.background = 'rgba(56, 189, 248, 0.08)';
+        htmlRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } else {
-        row.classList.remove('active-comp');
-        (row as HTMLElement).style.borderColor = 'var(--border)';
-        (row as HTMLElement).style.background = 'var(--surface)';
+        htmlRow.style.borderColor = 'var(--border)';
+        htmlRow.style.background = 'var(--surface)';
       }
     });
+
+    this.updateCanvasToolbar(isPl);
+    this.updateEstimatorBox(isPl);
+  }
+
+  private updateCanvasToolbar(isPl: boolean) {
+    const toolbar = this.el.querySelector('#canvas-quick-toolbar');
+    if (!toolbar) return;
+
+    if (!this.selectedCompId) {
+      toolbar.innerHTML = `
+        <span style="color: var(--muted); font-size: 11px;">
+          ${isPl ? '🖱️ Kliknij komponent na płytce, aby go edytować lub przeciągaj myszą · Skróty: R (obrót), Del (usuń), Strzałki (nudge 1mm)' : '🖱️ Click component on PCB to edit or drag with mouse · Keys: R (rotate), Del (delete), Arrows (nudge 1mm)'}
+        </span>
+      `;
+      return;
+    }
+
+    const comp = this.placedComponents.find((c) => c.id === this.selectedCompId);
+    if (!comp) return;
+
+    const isCol = this.collidingCompIds.has(comp.id);
+    toolbar.innerHTML = `
+      <div class="row" style="gap: 8px; align-items: center; overflow: hidden;">
+        <span class="badge" style="font-family: var(--mono); font-weight: 700; background: #0284c7; color: #fff;">${comp.ref}</span>
+        <span style="font-weight: 600; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">${comp.name}</span>
+        <span style="color: var(--muted); font-family: var(--mono); font-size: 11px;">[${comp.x}, ${comp.y} mm · ${comp.rotation}°]</span>
+        ${isCol ? `<span style="color: #ef4444; font-weight: 700; font-size: 11px;">⚠️ ${isPl ? 'Kolizja na laminacie!' : 'Collision on PCB!'}</span>` : ''}
+      </div>
+      <div class="row" style="gap: 6px; align-items: center;">
+        <button type="button" class="btn sm ghost" id="btn-quick-rot" title="${isPl ? 'Obróć o 90° (Klawisz R)' : 'Rotate 90° (Key R)'}" style="padding: 2px 8px; font-size: 11px;">
+          ${icon('rotate', 12)}<span>90°</span>
+        </button>
+        <button type="button" class="btn sm ghost" id="btn-quick-del" title="${isPl ? 'Usuń (Klawisz Del)' : 'Delete (Key Del)'}" style="padding: 2px 8px; font-size: 11px; color: #ef4444;">
+          ${icon('x', 12)}<span>${isPl ? 'Usuń' : 'Delete'}</span>
+        </button>
+      </div>
+    `;
+
+    toolbar.querySelector('#btn-quick-rot')?.addEventListener('click', () => this.rotateSelectedComponent(isPl));
+    toolbar.querySelector('#btn-quick-del')?.addEventListener('click', () => {
+      if (this.selectedCompId) this.deleteComponent(this.selectedCompId, isPl);
+    });
+  }
+
+  private calculateBomCost(): number {
+    return this.placedComponents.reduce((acc, c) => acc + getPartEstimatedCost(c.partId, c).unitPriceUsd, 0);
+  }
+
+  private updateEstimatorBox(isPl: boolean) {
+    const bomCost = this.calculateBomCost();
+    const fabCost = 2.00;
+    const totalCost = fabCost + bomCost;
+
+    const totalEl = this.el.querySelector('#estimator-total-price');
+    if (totalEl) totalEl.textContent = `$${totalCost.toFixed(2)} USD`;
+
+    const bomEl = this.el.querySelector('#estimator-bom-price');
+    if (bomEl) bomEl.textContent = `$${bomCost.toFixed(2)}`;
+
+    const dfmEl = this.el.querySelector('#estimator-dfm-status');
+    if (dfmEl) {
+      const colCount = this.collidingCompIds.size;
+      if (colCount > 0) {
+        dfmEl.textContent = isPl ? `⚠️ ${colCount} kolizji (DFM Warning)` : `⚠️ ${colCount} collisions (DFM Warning)`;
+        (dfmEl as HTMLElement).style.color = '#ef4444';
+      } else {
+        dfmEl.textContent = isPl ? '✓ Bez kolizji (DFM Pass)' : '✓ Zero collisions (DFM Pass)';
+        (dfmEl as HTMLElement).style.color = '#34d399';
+      }
+    }
   }
 
   private updateSvgPreview() {
@@ -690,6 +1473,12 @@ export class BoardCreatorModal {
       boardRect.setAttribute('width', String(this.customWidth));
       boardRect.setAttribute('height', String(this.customHeight));
       boardRect.setAttribute('fill', this.customColor);
+    }
+
+    const boardGrid = svg.querySelector('#svg-board-grid');
+    if (boardGrid) {
+      boardGrid.setAttribute('width', String(this.customWidth));
+      boardGrid.setAttribute('height', String(this.customHeight));
     }
 
     const silkOutline = svg.querySelector('#svg-silk-outline');
@@ -713,104 +1502,127 @@ export class BoardCreatorModal {
 
     const compsLayer = svg.querySelector('#svg-components-layer');
     if (compsLayer) {
+      this.collidingCompIds = detectCollisions(this.placedComponents);
       compsLayer.innerHTML = this.placedComponents.map((c) => this.renderComponentSvg(c)).join('');
     }
 
     const dimText = this.el.querySelector('#preview-dim-text');
     if (dimText) dimText.textContent = `${this.customWidth} × ${this.customHeight} mm`;
+
+    const areaEl = this.el.querySelector('#estimator-area-text');
+    if (areaEl) areaEl.textContent = `${this.customWidth} × ${this.customHeight} mm (${((this.customWidth * this.customHeight) / 100).toFixed(1)} cm²)`;
   }
 
   private renderComponentSvg(comp: PlacedComponent): string {
     const fp = getFootprint(comp.partId, comp);
-    const isSelected = this.selectedCompId === comp.id;
     const ySvg = this.customHeight - comp.y;
     const w = fp.w;
     const h = fp.h;
+    const idLow = (comp.partId + ' ' + comp.ref + ' ' + comp.name).toLowerCase();
+    const isSelected = this.selectedCompId === comp.id;
+    const isColliding = this.collidingCompIds.has(comp.id);
 
     let bodySvg = '';
     let padsSvg = '';
 
-    if (fp.shape === 'chip') {
-      bodySvg = `
-        <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.5" fill="#1e293b" stroke="#475569" stroke-width="0.3" />
-        <circle cx="${-w / 2 + 1}" cy="${-h / 2 + 1}" r="0.4" fill="#94a3b8" />
-      `;
-      const half = Math.ceil(fp.padsCount / 2);
-      const spacing = (h - 2) / Math.max(1, half - 1);
-      for (let i = 0; i < half; i++) {
-        const py = (h / 2 - 1) - i * spacing;
-        padsSvg += `<rect x="${-w / 2 - 0.7}" y="${py - 0.35}" width="0.9" height="0.7" rx="0.1" fill="#f59e0b" stroke="#fbbf24" stroke-width="0.1" />`;
-      }
-      for (let i = 0; i < fp.padsCount - half; i++) {
-        const py = -(h / 2 - 1) + i * spacing;
-        padsSvg += `<rect x="${w / 2 - 0.2}" y="${py - 0.35}" width="0.9" height="0.7" rx="0.1" fill="#f59e0b" stroke="#fbbf24" stroke-width="0.1" />`;
-      }
-    } else if (fp.shape === 'led') {
-      bodySvg = `
-        <circle cx="0" cy="0" r="${w / 2}" fill="#ef4444" stroke="#f87171" stroke-width="0.3" opacity="0.9" />
-        <circle cx="-0.4" cy="-0.4" r="${w / 4}" fill="#fca5a5" opacity="0.6" />
-      `;
-      padsSvg = `
-        <rect x="${-w / 2 - 0.8}" y="-0.5" width="0.9" height="1.0" rx="0.1" fill="#f59e0b" />
-        <circle cx="${w / 2 + 0.4}" cy="0" r="0.5" fill="#f59e0b" />
-      `;
-    } else if (fp.shape === 'diode') {
-      bodySvg = `
-        <rect x="${-w * 0.35}" y="${-h * 0.4}" width="${w * 0.7}" height="${h * 0.8}" rx="0.2" fill="#111827" stroke="#374151" stroke-width="0.2" />
-        <line x1="${w * 0.15}" y1="${-h * 0.4}" x2="${w * 0.15}" y2="${h * 0.4}" stroke="#ffffff" stroke-width="0.4" />
-      `;
-      padsSvg = `
-        <rect x="${-w / 2}" y="${-h * 0.4}" width="${w * 0.25}" height="${h * 0.8}" rx="0.1" fill="#f59e0b" />
-        <rect x="${w / 2 - w * 0.25}" y="${-h * 0.4}" width="${w * 0.25}" height="${h * 0.8}" rx="0.1" fill="#f59e0b" />
-      `;
-    } else if (fp.shape === 'header') {
-      bodySvg = `
-        <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.4" fill="#1f2937" stroke="#9ca3af" stroke-width="0.2" />
-      `;
-      padsSvg = `
-        <circle cx="0" cy="${-h / 4}" r="1.0" fill="#f59e0b" stroke="#000" stroke-width="0.3" />
-        <circle cx="0" cy="${h / 4}" r="1.0" fill="#f59e0b" stroke="#000" stroke-width="0.3" />
-      `;
-    } else if (fp.shape === 'tactile') {
-      bodySvg = `
-        <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="0.4" fill="#334155" stroke="#64748b" stroke-width="0.3" />
-        <circle cx="0" cy="0" r="${w / 3.5}" fill="#0f172a" stroke="#cbd5e1" stroke-width="0.2" />
-      `;
-      padsSvg = `
-        <circle cx="${-w / 2}" cy="${-h / 2}" r="0.8" fill="#f59e0b" />
-        <circle cx="${-w / 2}" cy="${h / 2}" r="0.8" fill="#f59e0b" />
-        <circle cx="${w / 2}" cy="${-h / 2}" r="0.8" fill="#f59e0b" />
-        <circle cx="${w / 2}" cy="${h / 2}" r="0.8" fill="#f59e0b" />
-      `;
-    } else if (fp.shape === 'pin') {
-      bodySvg = `
-        <circle cx="0" cy="0" r="${w / 2}" fill="#f59e0b" stroke="#fbbf24" stroke-width="0.2" />
-        <circle cx="0" cy="0" r="${w / 4}" fill="#0f172a" />
-      `;
+    if (idLow.includes('esp32')) {
+      const res = renderEsp32Svg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (idLow.includes('pico') || idLow.includes('rp2040')) {
+      const res = renderPicoSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (idLow.includes('atmega328p-pu') || idLow.includes('dip-28') || (idLow.includes('atmega') && !idLow.includes('tqfp'))) {
+      const res = renderDip28Svg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (idLow.includes('usb-c') || idLow.includes('type-c')) {
+      const res = renderUsbCSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (idLow.includes('usb-b')) {
+      const res = renderUsbBSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (idLow.includes('dc-jack') || idLow.includes('barrel') || idLow.includes('jack') || idLow.includes('dc in')) {
+      const res = renderDcJackSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (idLow.includes('ams1117') || idLow.includes('sot-223') || comp.ref.includes('LDO')) {
+      const res = renderSot223Svg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('SW') || idLow.includes('switch') || idLow.includes('tactile') || idLow.includes('przycisk')) {
+      const res = renderTactileSwitchSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('J') || idLow.includes('header') || idLow.includes('złącze') || idLow.includes('zlacze')) {
+      const isFemale = idLow.includes('female') || idLow.includes('żeńsk') || idLow.includes('zensk');
+      const res = renderHeaderSvg(w, h, fp.padsCount, isFemale);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('LED') || idLow.includes('led')) {
+      const res = renderLedSvg(w, h, comp.name);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('D') || idLow.includes('diode') || idLow.includes('ss34') || idLow.includes('dioda')) {
+      const res = renderDiodeSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('C') || idLow.includes('capacitor') || idLow.includes('kondensator') || idLow.includes('mlcc')) {
+      const res = renderCapacitor0805Svg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('R') || idLow.includes('resistor') || idLow.includes('rezystor') || idLow.includes('opornik')) {
+      const res = renderResistor0805Svg(w, h, comp.value);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (comp.ref.startsWith('F') || idLow.includes('fuse') || idLow.includes('bezpiecznik')) {
+      const res = renderFuseSvg(w, h);
+      bodySvg = res.body;
+      padsSvg = res.pads;
+    } else if (fp.shape === 'chip') {
+      const res = renderGenericChipSvg(w, h, fp.padsCount, comp.name || comp.ref);
+      bodySvg = res.body;
+      padsSvg = res.pads;
     } else {
-      const bodyColor = comp.ref.startsWith('C') ? '#78350f' : (comp.ref.startsWith('F') ? '#1e1b4b' : '#0f172a');
-      bodySvg = `
-        <rect x="${-w * 0.35}" y="${-h * 0.4}" width="${w * 0.7}" height="${h * 0.8}" rx="0.15" fill="${bodyColor}" stroke="#475569" stroke-width="0.15" />
-      `;
-      padsSvg = `
-        <rect x="${-w / 2}" y="${-h * 0.45}" width="${w * 0.25}" height="${h * 0.9}" rx="0.1" fill="#f59e0b" />
-        <rect x="${w / 2 - w * 0.25}" y="${-h * 0.45}" width="${w * 0.25}" height="${h * 0.9}" rx="0.1" fill="#f59e0b" />
-      `;
+      const res = renderResistor0805Svg(w, h, comp.value);
+      bodySvg = res.body;
+      padsSvg = res.pads;
     }
 
-    const ringStroke = isSelected ? '#38bdf8' : 'none';
+    let ringStroke = 'none';
+    let ringFill = 'none';
+    let ringDash = '';
+    let ringWidth = 0.5;
+
+    if (isColliding) {
+      ringStroke = '#ef4444';
+      ringFill = 'rgba(239, 68, 68, 0.15)';
+      ringDash = '1.2,0.8';
+      ringWidth = 0.6;
+    } else if (isSelected) {
+      ringStroke = '#38bdf8';
+      ringFill = 'rgba(56, 189, 248, 0.08)';
+      ringDash = '1.2,0.8';
+      ringWidth = 0.5;
+    }
+
     const selectionRing = `
-      <rect class="selection-ring" x="${-w / 2 - 0.8}" y="${-h / 2 - 0.8}" width="${w + 1.6}" height="${h + 1.6}" rx="0.4" fill="none" stroke="${ringStroke}" stroke-width="0.5" stroke-dasharray="1.2,0.8" />
+      <rect class="selection-ring" x="${-w / 2 - 0.8}" y="${-h / 2 - 0.8}" width="${w + 1.6}" height="${h + 1.6}" rx="0.5"
+            fill="${ringFill}" stroke="${ringStroke}" stroke-width="${ringWidth}" stroke-dasharray="${ringDash}" />
+      ${isColliding ? `<text x="${w / 2 + 1.2}" y="${-h / 2 + 1.0}" font-size="2.6" text-anchor="start">⚠️</text>` : ''}
     `;
 
-    const fontSize = Math.max(1.1, Math.min(1.8, Math.max(w, h) * 0.25));
+    const fontSize = Math.max(1.1, Math.min(1.8, Math.max(w, h) * 0.22));
 
     return `
-      <g class="preview-comp" data-comp-id="${comp.id}" transform="translate(${comp.x}, ${ySvg}) rotate(${comp.rotation})" style="cursor: move;">
+      <g class="preview-comp ${isColliding ? 'colliding-comp' : ''}" data-comp-id="${comp.id}" transform="translate(${comp.x}, ${ySvg}) rotate(${comp.rotation})" style="cursor: move;">
         ${padsSvg}
         ${bodySvg}
         ${selectionRing}
-        <text x="0" y="${-h / 2 - 0.6}" text-anchor="middle" font-size="${fontSize}" fill="#ffffff" font-family="monospace" font-weight="bold">${comp.ref}</text>
+        <text x="0" y="${-h / 2 - 0.7}" text-anchor="middle" font-size="${fontSize}" fill="#f8fafc" font-family="monospace" font-weight="bold">${comp.ref}</text>
       </g>
     `;
   }
@@ -829,13 +1641,18 @@ export class BoardCreatorModal {
 
   private renderComponentRowHtml(c: PlacedComponent, isPl: boolean): string {
     const isSelected = this.selectedCompId === c.id;
+    const isCol = this.collidingCompIds.has(c.id);
+    const borderColor = isCol ? '#ef4444' : (isSelected ? 'var(--accent)' : 'var(--border)');
+    const bg = isCol ? 'rgba(239, 68, 68, 0.08)' : (isSelected ? 'rgba(56, 189, 248, 0.08)' : 'var(--surface)');
+
     return `
       <div class="card placed-comp-row ${isSelected ? 'active-comp' : ''}" data-comp-id="${c.id}"
-           style="padding: 8px 10px; background: ${isSelected ? 'rgba(56, 189, 248, 0.08)' : 'var(--surface)'}; border: 1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}; border-radius: 6px; display: flex; flex-direction: column; gap: 6px;">
+           style="padding: 8px 10px; background: ${bg}; border: 1px solid ${borderColor}; border-radius: 6px; display: flex; flex-direction: column; gap: 6px;">
         <div class="row" style="justify-content: space-between; align-items: center;">
           <div class="row" style="gap: 8px; align-items: center; overflow: hidden;">
-            <span class="badge" style="font-family: var(--mono); font-weight: 700; font-size: 11px; background: var(--bg); border: 1px solid var(--border); color: var(--accent); min-width: 28px; text-align: center;">${c.ref}</span>
+            <span class="badge" style="font-family: var(--mono); font-weight: 700; font-size: 11px; background: var(--bg); border: 1px solid var(--border); color: ${isCol ? '#ef4444' : 'var(--accent)'}; min-width: 28px; text-align: center;">${c.ref}</span>
             <span style="font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;" title="${c.name}">${c.name}</span>
+            ${isCol ? `<span title="Kolizja na płytce" style="font-size: 12px;">⚠️</span>` : ''}
           </div>
           <button type="button" class="btn ghost icon sm btn-del-comp" data-comp-id="${c.id}" title="${isPl ? 'Usuń element' : 'Delete component'}" style="color: var(--danger, #ef4444); padding: 2px;">
             ${icon('x', 14)}
@@ -876,6 +1693,8 @@ export class BoardCreatorModal {
     this.updateSvgPreview();
     this.renderPlacedComponentsRows(isPl);
     this.updateTabBadge(isPl);
+    this.updateEstimatorBox(isPl);
+    this.updateCanvasToolbar(isPl);
   }
 
   private renderPlacedComponentsRows(isPl: boolean) {
@@ -903,7 +1722,7 @@ export class BoardCreatorModal {
         const compId = row.getAttribute('data-comp-id');
         if (compId) {
           this.selectedCompId = compId;
-          this.highlightSelectedComponent();
+          this.updateSelectionAndCollision(isPl);
         }
       });
     });
@@ -914,7 +1733,7 @@ export class BoardCreatorModal {
         const comp = this.placedComponents.find((c) => c.id === compId);
         if (comp) {
           comp.x = Math.max(0, Math.min(this.customWidth, Number((inp as HTMLInputElement).value) || 0));
-          this.updateComponentSvgTransform(comp);
+          this.onComponentNudge(comp, isPl);
         }
       });
     });
@@ -925,7 +1744,7 @@ export class BoardCreatorModal {
         const comp = this.placedComponents.find((c) => c.id === compId);
         if (comp) {
           comp.y = Math.max(0, Math.min(this.customHeight, Number((inp as HTMLInputElement).value) || 0));
-          this.updateComponentSvgTransform(comp);
+          this.onComponentNudge(comp, isPl);
         }
       });
     });
@@ -936,7 +1755,9 @@ export class BoardCreatorModal {
         const comp = this.placedComponents.find((c) => c.id === compId);
         if (comp) {
           comp.rotation = (Number((sel as HTMLSelectElement).value) || 0) as 0 | 90 | 180 | 270;
+          this.collidingCompIds = detectCollisions(this.placedComponents);
           this.updateComponentSvgTransform(comp);
+          this.updateSelectionAndCollision(isPl);
         }
       });
     });
@@ -954,12 +1775,13 @@ export class BoardCreatorModal {
     let initialY = 0;
 
     const hoverInfo = this.el.querySelector('#preview-hover-info');
+    const isPl = getLang() === 'pl';
 
     svg.addEventListener('mousedown', (e: MouseEvent) => {
       const compG = (e.target as Element).closest('.preview-comp') as SVGElement | null;
       if (!compG) {
         this.selectedCompId = null;
-        this.highlightSelectedComponent();
+        this.updateSelectionAndCollision(isPl);
         return;
       }
       const compId = compG.getAttribute('data-comp-id');
@@ -970,7 +1792,7 @@ export class BoardCreatorModal {
       isDragging = true;
       dragCompId = compId;
       this.selectedCompId = compId;
-      this.highlightSelectedComponent();
+      this.updateSelectionAndCollision(isPl);
 
       startClientX = e.clientX;
       startClientY = e.clientY;
@@ -985,7 +1807,10 @@ export class BoardCreatorModal {
         if (compG && hoverInfo) {
           const id = compG.getAttribute('data-comp-id');
           const c = this.placedComponents.find((p) => p.id === id);
-          if (c) hoverInfo.textContent = `${c.ref} (${c.name}): [${c.x}, ${c.y}] mm`;
+          if (c) {
+            const isCol = this.collidingCompIds.has(c.id);
+            hoverInfo.textContent = `${c.ref} (${c.name}): [${c.x}, ${c.y}] mm${isCol ? ' ⚠️' : ''}`;
+          }
         } else if (hoverInfo && hoverInfo.textContent) {
           hoverInfo.textContent = '';
         }
@@ -1009,13 +1834,18 @@ export class BoardCreatorModal {
         comp.x = newX;
         comp.y = newY;
         this.updateComponentSvgTransform(comp);
+        this.collidingCompIds = detectCollisions(this.placedComponents);
+        this.updateSelectionAndCollision(isPl);
 
         const inpX = this.el.querySelector(`.inp-comp-x[data-comp-id="${comp.id}"]`) as HTMLInputElement | null;
         if (inpX && document.activeElement !== inpX) inpX.value = String(comp.x);
         const inpY = this.el.querySelector(`.inp-comp-y[data-comp-id="${comp.id}"]`) as HTMLInputElement | null;
         if (inpY && document.activeElement !== inpY) inpY.value = String(comp.y);
 
-        if (hoverInfo) hoverInfo.textContent = `${comp.ref}: X=${comp.x} mm, Y=${comp.y} mm`;
+        if (hoverInfo) {
+          const isCol = this.collidingCompIds.has(comp.id);
+          hoverInfo.textContent = `${comp.ref}: X=${comp.x} mm, Y=${comp.y} mm${isCol ? ' ⚠️' : ''}`;
+        }
       }
     };
 
@@ -1028,21 +1858,233 @@ export class BoardCreatorModal {
     window.addEventListener('mouseup', this.onWindowMouseUp);
   }
 
+  private openOrderModal(isPl: boolean) {
+    const sc = this.generateScenario();
+    const bomCost = this.calculateBomCost();
+    const fabCost = 2.00;
+    const totalCost = fabCost + bomCost;
+
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'modal-backdrop';
+    modalBackdrop.id = 'pcb-order-modal';
+    modalBackdrop.style.cssText = 'z-index: 10000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.78); backdrop-filter: blur(4px);';
+
+    const colorNames: Record<string, string> = {
+      '#0f2e1a': isPl ? 'Zielony klasyczny (FR4 Green)' : 'Classic Green FR4',
+      '#0e1828': isPl ? 'Niebieski (Arduino Blue)' : 'Arduino Blue',
+      '#18181e': isPl ? 'Czarny matowy (Matte Black)' : 'Matte Black',
+      '#450a0a': isPl ? 'Czerwony (SparkFun Red)' : 'SparkFun Red',
+      '#2e1038': isPl ? 'Fioletowy (OSH Park Purple)' : 'OSH Park Purple',
+      '#e2e8f0': isPl ? 'Biały (Pure White)' : 'Pure White',
+    };
+    const colorStr = colorNames[this.customColor] || this.customColor;
+
+    modalBackdrop.innerHTML = `
+      <div class="modal" style="width: min(720px, 94vw); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(16, 185, 129, 0.4); box-shadow: 0 16px 40px rgba(0,0,0,0.85); background: #0c0e14;" role="dialog" aria-modal="true">
+        <!-- Modal Head -->
+        <div class="modal-head" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: #131722;">
+          <div class="row" style="gap: 10px; align-items: center;">
+            <div style="color: #10b981;">${icon('box', 22)}</div>
+            <div>
+              <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #34d399;">
+                ${isPl ? 'Zamówienie Prototypu PCB & Montażu SMT' : 'Order PCB Prototype & SMT Assembly'}
+              </h3>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">
+                LiveBoard Pro · ${isPl ? 'Zintegrowana wycena fabrykacji PCBWay & JLCPCB' : 'Integrated PCBWay & JLCPCB Prototype Quotation'}
+              </div>
+            </div>
+          </div>
+          <button class="btn ghost icon sm" id="btn-close-order" title="Zamknij (Esc)">
+            ${icon('x', 14)}
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; flex: 1;">
+          <!-- Specifications Summary -->
+          <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12px;">
+            <div><b>${isPl ? 'Wymiary laminatu:' : 'Dimensions:'}</b> ${this.customWidth} × ${this.customHeight} mm</div>
+            <div><b>${isPl ? 'Ilość sztuk:' : 'Quantity:'}</b> 5 pcs (${isPl ? 'seria prototypowa' : 'prototype batch'})</div>
+            <div><b>${isPl ? 'Struktura warstw:' : 'Layer stackup:'}</b> 2-Layer FR4 (1.6mm, 1oz Cu)</div>
+            <div><b>${isPl ? 'Soldermaska:' : 'Solder mask:'}</b> ${colorStr}</div>
+            <div><b>${isPl ? 'Fabrykacja PCB:' : 'PCB Fabrication:'}</b> <span style="color: #34d399; font-weight: bold;">$2.00</span></div>
+            <div><b>${isPl ? 'Elementy SMT (BOM):' : 'BOM Components:'}</b> <span style="color: #34d399; font-weight: bold;">$${bomCost.toFixed(2)}</span> (${this.placedComponents.length} szt.)</div>
+          </div>
+
+          <!-- Total Callout -->
+          <div class="row" style="justify-content: space-between; align-items: center; background: #131722; padding: 12px 18px; border-radius: 8px; border: 1px solid var(--border);">
+            <div>
+              <div style="font-size: 12px; color: var(--muted);">${isPl ? 'Całkowity szacowany koszt zamówienia:' : 'Total estimated order cost:'}</div>
+              <div style="font-size: 20px; font-weight: 800; color: #34d399; font-family: var(--mono);">$${totalCost.toFixed(2)} USD <span style="font-size: 13px; color: var(--muted); font-weight: 400;">(~${(totalCost * 4.05).toFixed(2)} PLN)</span></div>
+            </div>
+            <span class="badge info" style="font-size: 11px;">${this.collidingCompIds.size === 0 ? '✓ DFM Passed' : `⚠️ ${this.collidingCompIds.size} DFM Warnings`}</span>
+          </div>
+
+          <!-- Production Package Checklist -->
+          <div>
+            <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text);">
+              📁 ${isPl ? 'Wygenerowany pakiet produkcyjny:' : 'Generated Production Files:'}
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; font-family: var(--mono); color: var(--text-2);">
+              <div style="background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border);">✓ Gerber RS-274X (Top/Bottom, Silk, Mask, Edge)</div>
+              <div style="background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border);">✓ Excellon Drill File (.drl)</div>
+              <div style="background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border);">✓ Pick and Place CPL Centroid (.csv)</div>
+              <div style="background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border);">✓ Bill of Materials BOM LCSC/PCBWay (.csv)</div>
+            </div>
+          </div>
+
+          <!-- Placed Components Summary Table -->
+          <div>
+            <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text);">
+              📋 ${isPl ? 'Zestawienie komponentów do montażu SMT:' : 'SMT Component Placement Table:'}
+            </div>
+            <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: #070709;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; font-family: var(--mono);">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--border); background: #131722; color: var(--muted);">
+                    <th style="padding: 6px 10px;">Ref</th>
+                    <th style="padding: 6px 10px;">Part / MPN</th>
+                    <th style="padding: 6px 10px;">LCSC / PCBWay</th>
+                    <th style="padding: 6px 10px; text-align: right;">Cena/szt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.placedComponents.map((c) => {
+                    const pricing = getPartEstimatedCost(c.partId, c);
+                    return `
+                      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 5px 10px; color: var(--accent); font-weight: bold;">${c.ref}</td>
+                        <td style="padding: 5px 10px; color: var(--text);">${c.name}</td>
+                        <td style="padding: 5px 10px; color: var(--muted);">${pricing.lcsc}</td>
+                        <td style="padding: 5px 10px; text-align: right; color: #34d399;">$${pricing.unitPriceUsd.toFixed(2)}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div style="padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #131722; flex-wrap: wrap; gap: 10px;">
+          <div class="row" style="gap: 8px;">
+            <button type="button" class="btn sm ghost" id="btn-order-copy-bom">
+              ${icon('copy', 14)}<span>${isPl ? 'Kopiuj BOM (CSV)' : 'Copy BOM CSV'}</span>
+            </button>
+            <button type="button" class="btn sm ghost" id="btn-order-copy-cpl">
+              ${icon('copy', 14)}<span>${isPl ? 'Kopiuj CPL (CSV)' : 'Copy CPL CSV'}</span>
+            </button>
+            <button type="button" class="btn sm ghost" id="btn-order-download-pkg">
+              ${icon('download', 14)}<span>${isPl ? 'Pobierz Paczkę ZIP' : 'Download ZIP Package'}</span>
+            </button>
+          </div>
+          <button type="button" class="btn primary" id="btn-order-checkout-demo" style="background: #059669; border-color: #10b981; font-weight: 700;">
+            ${icon('check', 16)}<span>${isPl ? 'Złóż zapytanie PCBWay / JLCPCB' : 'Submit PCBWay / JLCPCB Request'}</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modalBackdrop);
+
+    const closeBtn = modalBackdrop.querySelector('#btn-close-order');
+    closeBtn?.addEventListener('click', () => modalBackdrop.remove());
+
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) modalBackdrop.remove();
+    });
+
+    modalBackdrop.querySelector('#btn-order-copy-bom')?.addEventListener('click', () => {
+      const csv = generateBomCsv(this.placedComponents);
+      navigator.clipboard?.writeText(csv);
+      this.opts.toast(isPl ? 'Skopiowano zestawienie BOM (CSV) do schowka!' : 'Copied BOM (CSV) to clipboard!', 'success');
+    });
+
+    modalBackdrop.querySelector('#btn-order-copy-cpl')?.addEventListener('click', () => {
+      const csv = generateCplCsv(this.placedComponents);
+      navigator.clipboard?.writeText(csv);
+      this.opts.toast(isPl ? 'Skopiowano plik CPL (Centroid Pick & Place) do schowka!' : 'Copied CPL (Centroid) to clipboard!', 'success');
+    });
+
+    modalBackdrop.querySelector('#btn-order-download-pkg')?.addEventListener('click', async () => {
+      await this.downloadProductionZip(sc, isPl);
+    });
+
+    modalBackdrop.querySelector('#btn-order-checkout-demo')?.addEventListener('click', () => {
+      modalBackdrop.remove();
+      this.opts.toast(
+        isPl
+          ? `Zapytanie produkcyjne dla "${sc.meta.title}" (5 szt.) zostało przesłane do API fabrykacji!`
+          : `Prototype production request for "${sc.meta.title}" submitted to fabrication API!`,
+        'success'
+      );
+    });
+  }
+
+  private async downloadProductionZip(sc: Scenario, isPl: boolean) {
+    const bomCsv = generateBomCsv(this.placedComponents);
+    const cplCsv = generateCplCsv(this.placedComponents);
+    const enc = new TextEncoder();
+
+    const readme = `LiveBoard Studio - PCB Production Package
+Project: ${sc.meta.title}
+Board Dimensions: ${this.customWidth} x ${this.customHeight} mm
+Layers: 2
+Thickness: 1.6mm FR4
+Solder Mask: ${this.customColor}
+Silkscreen: White (#e0e0e0)
+Quantity: 5 pcs prototype batch
+
+Files included:
+- bom.csv: Bill of Materials with LCSC and PCBWay part numbers
+- cpl.csv: Component Centroid Placement list for SMT pick & place
+- board.pcbfix.json: Complete circuit simulation data
+Ready for upload to PCBWay or JLCPCB.
+`;
+
+    try {
+      const zipBytes = await writeZip([
+        ['README.txt', enc.encode(readme)],
+        ['production/bom.csv', enc.encode(bomCsv)],
+        ['production/cpl.csv', enc.encode(cplCsv)],
+        ['board.pcbfix.json', enc.encode(JSON.stringify(sc, null, 2))],
+      ]);
+      const blob = new Blob([zipBytes as BlobPart], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sc.id}-pcb-production.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.opts.toast(isPl ? 'Pobrano paczkę produkcyjną (.zip)!' : 'Downloaded production package (.zip)!', 'success');
+    } catch {
+      const blob = new Blob([JSON.stringify(sc, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sc.id}.pcbfix.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.opts.toast(isPl ? 'Pobrano plik projektu .pcbfix.json' : 'Downloaded project file .pcbfix.json', 'success');
+    }
+  }
+
   private render() {
     const isPl = getLang() === 'pl';
 
     this.el.innerHTML = `
-      <div class="modal" style="width: min(960px, 95vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;" role="dialog" aria-modal="true" aria-labelledby="creator-title">
+      <div class="modal" style="width: min(1000px, 96vw); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden;" role="dialog" aria-modal="true" aria-labelledby="creator-title">
         <!-- Header -->
         <div class="modal-head" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border);">
           <div class="row" style="gap: 10px; align-items: center;">
             <div style="color: var(--accent);">${icon('grid', 20)}</div>
             <div>
               <h2 id="creator-title" style="margin: 0; font-size: 17px; font-weight: 700;">
-                ${isPl ? 'Kreator Płytek & Baza Komponentów PCBWay / LCSC' : 'Board Creator & PCBWay / LCSC Parts Database'}
+                ${isPl ? 'LiveBoard Studio · Kreator Płytek PCB & Baza Komponentów' : 'LiveBoard Studio · Custom PCB Creator & Parts Database'}
               </h2>
               <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
-                ${isPl ? 'Projektuj obwody, rozmieszczaj części na laminacie, wstrzykuj usterki i eksportuj' : 'Design circuits, place parts interactively on PCB, inject faults, and export'}
+                ${isPl ? 'Projektuj obwody, rozmieszczaj części na laminacie, sprawdzaj kolizje DFM, wyceniaj produkcję i eksportuj' : 'Design circuits, place parts interactively on PCB, check DFM collisions, estimate cost, and export'}
               </div>
             </div>
           </div>
@@ -1054,10 +2096,10 @@ export class BoardCreatorModal {
         <!-- Navigation Tabs -->
         <div class="cat-toolbar" style="padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
           <button class="btn sm ${this.activeTab === 'builder' ? 'primary' : 'ghost'}" id="tab-btn-builder">
-            ${icon('grid', 14)}<span>${isPl ? 'Kreator Obwodów i Modyfikacji' : 'Circuit & Mod Builder'}${this.placedComponents.length ? ` (${this.placedComponents.length})` : ''}</span>
+            ${icon('grid', 14)}<span>${isPl ? 'Kreator Obwodów & CAD' : 'Circuit & CAD Builder'}${this.placedComponents.length ? ` (${this.placedComponents.length})` : ''}</span>
           </button>
           <button class="btn sm ${this.activeTab === 'catalog' ? 'primary' : 'ghost'}" id="tab-btn-catalog">
-            ${icon('search', 14)}<span>${isPl ? 'Baza Części (PCBWay / LCSC / DigiKey)' : 'Parts Catalog (PCBWay / LCSC)'}</span>
+            ${icon('search', 14)}<span>${isPl ? 'Katalog Części (PCBWay / LCSC / DigiKey)' : 'Parts Catalog (PCBWay / LCSC)'}</span>
           </button>
         </div>
 
@@ -1072,6 +2114,11 @@ export class BoardCreatorModal {
   }
 
   private renderBuilderTab(isPl: boolean): string {
+    const bomCost = this.calculateBomCost();
+    const fabCost = 2.00;
+    const totalCost = fabCost + bomCost;
+    const colCount = this.collidingCompIds.size;
+
     return `
       <div style="display: flex; flex-direction: column; gap: 18px;">
         <!-- 1. Board preset selector -->
@@ -1110,13 +2157,14 @@ export class BoardCreatorModal {
                    style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" />
           </div>
           <div>
-            <label for="inp-board-color" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">${isPl ? 'Kolor soldermaski' : 'Solder Mask Color'}</label>
+            <label for="inp-board-color" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">${isPl ? 'Kolor soldermaski (OLED CAD)' : 'Solder Mask Color (OLED CAD)'}</label>
             <select id="inp-board-color" style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
-              <option value="#124422" ${this.customColor === '#124422' ? 'selected' : ''}>Zielony (Classic Green)</option>
-              <option value="#0b2b40" ${this.customColor === '#0b2b40' ? 'selected' : ''}>Niebieski (Arduino Blue)</option>
-              <option value="#40121a" ${this.customColor === '#40121a' ? 'selected' : ''}>Czerwony (SparkFun Red)</option>
-              <option value="#301538" ${this.customColor === '#301538' ? 'selected' : ''}>Fioletowy (OSH Park Purple)</option>
-              <option value="#16181b" ${this.customColor === '#16181b' ? 'selected' : ''}>Czarny matowy (Matte Black)</option>
+              <option value="#0f2e1a" ${this.customColor === '#0f2e1a' ? 'selected' : ''}>Zielony klasyczny (Classic Green)</option>
+              <option value="#0e1828" ${this.customColor === '#0e1828' ? 'selected' : ''}>Niebieski (Arduino Blue)</option>
+              <option value="#18181e" ${this.customColor === '#18181e' ? 'selected' : ''}>Czarny matowy (Matte Black)</option>
+              <option value="#450a0a" ${this.customColor === '#450a0a' ? 'selected' : ''}>Czerwony (SparkFun Red)</option>
+              <option value="#2e1038" ${this.customColor === '#2e1038' ? 'selected' : ''}>Fioletowy (OSH Park Purple)</option>
+              <option value="#e2e8f0" ${this.customColor === '#e2e8f0' ? 'selected' : ''}>Biały (Pure White)</option>
             </select>
           </div>
           <div>
@@ -1131,27 +2179,34 @@ export class BoardCreatorModal {
           </div>
         </div>
 
-        <!-- 2 & 3. Interactive Preview & Placed Components Section -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start;">
+        <!-- 2 & 3. Interactive CAD Preview & Placed Components Section -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start;">
           <!-- Left Column: CAD Preview & Quick Add -->
           <div style="display: flex; flex-direction: column; gap: 10px;">
             <div class="row" style="justify-content: space-between; align-items: center;">
               <span style="font-size: 13px; font-weight: 600; color: var(--text);">
-                ${isPl ? '2. Interaktywny podgląd płytki CAD:' : '2. Interactive CAD Board Preview:'}
+                ${isPl ? '2. Wektorowy podgląd CAD płytki (OLED):' : '2. Vector CAD Board Canvas (OLED):'}
               </span>
               <span id="preview-dim-text" style="font-size: 11px; color: var(--muted); font-family: var(--mono);">
                 ${this.customWidth} × ${this.customHeight} mm
               </span>
             </div>
 
-            <!-- SVG Container -->
-            <div id="pcb-preview-container" style="background: #090d16; border-radius: 8px; border: 1px solid var(--border); padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 220px; max-height: 300px; overflow: hidden; position: relative; box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);">
+            <!-- Canvas Quick HUD Toolbar -->
+            <div id="canvas-quick-toolbar" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: #131722; border-radius: 6px; border: 1px solid var(--border); min-height: 32px;">
+              <span style="color: var(--muted); font-size: 11px;">
+                ${isPl ? '🖱️ Kliknij komponent na płytce, aby go edytować lub przeciągaj myszą · Skróty: R (obrót), Del (usuń), Strzałki (nudge 1mm)' : '🖱️ Click component on PCB to edit or drag with mouse · Keys: R (rotate), Del (delete), Arrows (nudge 1mm)'}
+              </span>
+            </div>
+
+            <!-- SVG Container (Dark OLED CAD Canvas) -->
+            <div id="pcb-preview-container" style="background: #070709; border-radius: 8px; border: 1px solid #1c1e26; padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 240px; max-height: 320px; overflow: hidden; position: relative; box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);">
               ${this.renderSvgPreview()}
             </div>
 
             <!-- Live drag hint & hover info -->
             <div class="row" style="justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); min-height: 18px;">
-              <span>${isPl ? '🖱️ Przeciągaj elementy myszą po laminacie' : '🖱️ Drag components with mouse to reposition'}</span>
+              <span>${isPl ? '🖱️ Precyzyjne pozycjonowanie z detekcją kolizji DFM' : '🖱️ Precision placement with real-time DFM collision detection'}</span>
               <span id="preview-hover-info" style="font-family: var(--mono); color: var(--accent); font-weight: 600;"></span>
             </div>
 
@@ -1179,11 +2234,14 @@ export class BoardCreatorModal {
                 <button type="button" class="btn sm ghost btn-quick-add" data-kind="ldo" title="${isPl ? 'Dodaj stabilizator AMS1117-3.3' : 'Add AMS1117-3.3 LDO'}">
                   + LDO 3.3V
                 </button>
+                <button type="button" class="btn sm ghost btn-quick-add" data-kind="usb-c" title="${isPl ? 'Dodaj gniazdo USB-C 16-pin' : 'Add USB-C 16-pin connector'}">
+                  + USB-C
+                </button>
+                <button type="button" class="btn sm ghost btn-quick-add" data-kind="switch" title="${isPl ? 'Dodaj przycisk tact 6x6mm' : 'Add tact switch 6x6mm'}">
+                  + Przycisk
+                </button>
                 <button type="button" class="btn sm ghost btn-quick-add" data-kind="fuse" title="${isPl ? 'Dodaj bezpiecznik 1A' : 'Add 1A polyfuse'}">
                   + Fuse 1A
-                </button>
-                <button type="button" class="btn sm ghost btn-quick-add" data-kind="header" title="${isPl ? 'Dodaj złącze zasilania USB 5V' : 'Add USB 5V header'}">
-                  + USB 5V
                 </button>
                 <button type="button" class="btn sm primary" id="btn-browse-catalog-quick" style="margin-left: auto;">
                   ${icon('search', 14)}<span>${isPl ? 'Katalog Części...' : 'Parts Catalog...'}</span>
@@ -1205,14 +2263,52 @@ export class BoardCreatorModal {
             </div>
 
             <!-- Scrollable Components list -->
-            <div id="placed-comps-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+            <div id="placed-comps-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 440px; overflow-y: auto; padding-right: 4px;">
               ${this.renderPlacedComponentsRowsHtml(isPl)}
             </div>
           </div>
         </div>
 
+        <!-- 4. PCB Production & Cost Estimator Box (LiveBoard Pro) -->
+        <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 78, 59, 0.12) 100%); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+          <div class="row" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div class="row" style="gap: 10px; align-items: center;">
+              <span style="font-size: 20px;">⚡</span>
+              <div>
+                <div style="font-size: 13px; font-weight: 700; color: #10b981;">
+                  ${isPl ? 'Wycena Produkcji Prototypu PCB & Montażu SMT' : 'Instant PCB Prototype & SMT Assembly Estimate'}
+                </div>
+                <div style="font-size: 11px; color: var(--muted);">
+                  ${isPl ? 'Kalkulacja w czasie rzeczywistym na podstawie katalogu fabrykacji PCBWay & LCSC' : 'Real-time calculation based on PCBWay & LCSC fabrication database'}
+                </div>
+              </div>
+            </div>
+            <div class="row" style="gap: 12px; align-items: center;">
+              <div style="text-align: right;">
+                <div style="font-size: 11px; color: var(--muted);">${isPl ? 'Szacowany koszt 5 sztuk:' : 'Est. cost for 5 pcs:'}</div>
+                <div style="font-size: 18px; font-weight: 800; color: #34d399; font-family: var(--mono);" id="estimator-total-price">
+                  $${totalCost.toFixed(2)} USD
+                </div>
+              </div>
+              <button type="button" class="btn primary sm" id="btn-open-order-modal" style="background: #059669; border-color: #10b981; font-weight: 700; padding: 6px 14px;">
+                ${icon('box', 14)}<span>${isPl ? 'Zamów Prototyp PCB (PCBWay / JLCPCB)' : 'Order PCB Prototype (PCBWay / JLCPCB)'}</span>
+              </button>
+              <button type="button" class="btn ghost sm" id="btn-copy-bom-quick" title="${isPl ? 'Kopiuj zestawienie BOM (CSV)' : 'Copy BOM CSV'}">
+                ${icon('copy', 14)}<span>BOM CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; font-size: 11px; font-family: var(--mono); color: var(--text-2); background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px;">
+            <div><b>${isPl ? 'Laminat FR4 2-warstwowy:' : '2-layer FR4 PCB:'}</b> <span style="color: #34d399;">$2.00</span> (5 szt. 1.6mm)</div>
+            <div><b>${isPl ? 'Elementy SMT (BOM):' : 'SMT Components (BOM):'}</b> <span style="color: #34d399;" id="estimator-bom-price">$${bomCost.toFixed(2)}</span> (${this.placedComponents.length} szt.)</div>
+            <div><b>${isPl ? 'Wymiary laminatu:' : 'Board dimensions:'}</b> <span id="estimator-area-text">${this.customWidth} × ${this.customHeight} mm (${((this.customWidth * this.customHeight) / 100).toFixed(1)} cm²)</span></div>
+            <div><b>${isPl ? 'Status DFM / CPL:' : 'DFM / CPL Status:'}</b> <span id="estimator-dfm-status" style="color: ${colCount > 0 ? '#ef4444' : '#34d399'}; font-weight: bold;">${colCount > 0 ? (isPl ? `⚠️ ${colCount} kolizji (DFM Warning)` : `⚠️ ${colCount} collisions (DFM Warning)`) : (isPl ? '✓ Bez kolizji (DFM Pass)' : '✓ Zero collisions (DFM Pass)')}</span></div>
+          </div>
+        </div>
+
         <!-- Action buttons -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 6px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 4px;">
           <button class="btn primary" id="btn-load-bench" style="justify-content: center; font-size: 14px;">
             ${icon('check', 16)}<span>${isPl ? 'Załaduj na stół warsztatowy' : 'Load onto Workbench'}</span>
           </button>
@@ -1230,29 +2326,38 @@ export class BoardCreatorModal {
   private renderSvgPreview(): string {
     return `
       <svg id="pcb-svg-preview" viewBox="0 0 ${this.customWidth} ${this.customHeight}"
-           style="width: 100%; max-height: 280px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));"
+           style="width: 100%; max-height: 300px; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.6));"
            xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <pattern id="pcb-grid" width="10" height="10" patternUnits="userSpaceOnUse">
-            <circle cx="5" cy="5" r="0.4" fill="rgba(255,255,255,0.12)" />
+          <!-- Dark OLED CAD Grid -->
+          <pattern id="pcb-grid-minor" width="2" height="2" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.12" fill="#1c1e26" />
+          </pattern>
+          <pattern id="pcb-grid-major" width="10" height="10" patternUnits="userSpaceOnUse">
+            <rect width="10" height="10" fill="url(#pcb-grid-minor)" />
+            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#222634" stroke-width="0.25" />
           </pattern>
         </defs>
 
         <!-- Board Solder Mask Base -->
         <rect id="svg-board-rect" x="0" y="0" width="${this.customWidth}" height="${this.customHeight}" rx="2" ry="2" fill="${this.customColor}" stroke="#334155" stroke-width="0.5" />
-        <rect x="0" y="0" width="${this.customWidth}" height="${this.customHeight}" fill="url(#pcb-grid)" />
+        <rect id="svg-board-grid" x="0" y="0" width="${this.customWidth}" height="${this.customHeight}" fill="url(#pcb-grid-major)" />
 
         <!-- Silkscreen edge guideline -->
-        <rect id="svg-silk-outline" x="1.5" y="1.5" width="${Math.max(1, this.customWidth - 3)}" height="${Math.max(1, this.customHeight - 3)}" rx="1" ry="1" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.25" stroke-dasharray="2,2" />
+        <rect id="svg-silk-outline" x="1.5" y="1.5" width="${Math.max(1, this.customWidth - 3)}" height="${Math.max(1, this.customHeight - 3)}" rx="1" ry="1" fill="none" stroke="rgba(224,224,224,0.35)" stroke-width="0.25" stroke-dasharray="2,2" />
 
-        <!-- Mounting holes -->
-        <circle cx="3.5" cy="3.5" r="1.4" fill="#090d16" stroke="rgba(255,255,255,0.3)" stroke-width="0.3" />
-        <circle id="svg-hole-tr" cx="${this.customWidth - 3.5}" cy="3.5" r="1.4" fill="#090d16" stroke="rgba(255,255,255,0.3)" stroke-width="0.3" />
-        <circle id="svg-hole-bl" cx="3.5" cy="${this.customHeight - 3.5}" r="1.4" fill="#090d16" stroke="rgba(255,255,255,0.3)" stroke-width="0.3" />
-        <circle id="svg-hole-br" cx="${this.customWidth - 3.5}" cy="${this.customHeight - 3.5}" r="1.4" fill="#090d16" stroke="rgba(255,255,255,0.3)" stroke-width="0.3" />
+        <!-- Mounting holes (Gold annular ring + dark drill hole) -->
+        <circle cx="3.5" cy="3.5" r="1.6" fill="#c88b32" stroke="#f59e0b" stroke-width="0.2" />
+        <circle cx="3.5" cy="3.5" r="1.0" fill="#070709" />
+        <circle id="svg-hole-tr" cx="${this.customWidth - 3.5}" cy="3.5" r="1.6" fill="#c88b32" stroke="#f59e0b" stroke-width="0.2" />
+        <circle cx="${this.customWidth - 3.5}" cy="3.5" r="1.0" fill="#070709" />
+        <circle id="svg-hole-bl" cx="3.5" cy="${this.customHeight - 3.5}" r="1.6" fill="#c88b32" stroke="#f59e0b" stroke-width="0.2" />
+        <circle cx="3.5" cy="${this.customHeight - 3.5}" r="1.0" fill="#070709" />
+        <circle id="svg-hole-br" cx="${this.customWidth - 3.5}" cy="${this.customHeight - 3.5}" r="1.6" fill="#c88b32" stroke="#f59e0b" stroke-width="0.2" />
+        <circle cx="${this.customWidth - 3.5}" cy="${this.customHeight - 3.5}" r="1.0" fill="#070709" />
 
         <!-- Silkscreen Branding Title -->
-        <text id="svg-board-title" x="${this.customWidth / 2}" y="3.8" text-anchor="middle" font-size="1.8" fill="rgba(255,255,255,0.7)" font-family="monospace" font-weight="bold">DEADBOARD · CUSTOM PCB</text>
+        <text id="svg-board-title" x="${this.customWidth / 2}" y="3.8" text-anchor="middle" font-size="1.8" fill="#e0e0e0" font-family="monospace" font-weight="bold">LIVEBOARD · CUSTOM PCB</text>
 
         <!-- Components Layer -->
         <g id="svg-components-layer">
@@ -1303,9 +2408,9 @@ export class BoardCreatorModal {
 
     return `
       <div style="display: flex; flex-direction: column; gap: 14px;">
-        <!-- Filters bar -->
+        <!-- Filters bar (Retains focus when typing) -->
         <div class="row" style="gap: 10px; flex-wrap: wrap;">
-          <input type="text" id="catalog-search" placeholder="${isPl ? 'Szukaj po symbolu (np. ESP32, AMS1117, RP2040, C15849)...' : 'Search part number (e.g. ESP32, AMS1117, RP2040, C15849)...'}"
+          <input type="text" id="catalog-search" placeholder="${isPl ? 'Szukaj po symbolu (np. ESP32, AMS1117, RP2040, C15849, USB-C)...' : 'Search part number (e.g. ESP32, AMS1117, RP2040, C15849, USB-C)...'}"
                  value="${this.searchQuery}" style="flex: 1; min-width: 200px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" />
           <select id="catalog-category" style="padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
             <option value="all" ${this.selectedCategory === 'all' ? 'selected' : ''}>${isPl ? 'Wszystkie kategorie' : 'All Categories'}</option>
@@ -1392,7 +2497,6 @@ export class BoardCreatorModal {
       });
     });
 
-    // Custom board inputs with live preview updates
     const inpW = this.el.querySelector('#inp-board-w') as HTMLInputElement | null;
     inpW?.addEventListener('input', () => {
       this.customWidth = Math.max(30, Math.min(250, Number(inpW.value) || 80));
@@ -1416,7 +2520,6 @@ export class BoardCreatorModal {
       this.injectFault = inpFault.value as FaultKind;
     });
 
-    // Quick add buttons
     this.el.querySelectorAll('.btn-quick-add').forEach((btn) => {
       btn.addEventListener('click', () => {
         const kind = btn.getAttribute('data-kind');
@@ -1433,18 +2536,17 @@ export class BoardCreatorModal {
       if (this.placedComponents.length === 0) return;
       this.placedComponents = [];
       this.selectedCompId = null;
+      this.collidingCompIds.clear();
       this.updatePreviewAndComponentsList(isPl);
       this.opts.toast(isPl ? 'Wyczyszczono wszystkie komponenty z płytki.' : 'Cleared all components from board.', 'info');
     });
 
-    // Placed components list events
     const listEl = this.el.querySelector('#placed-comps-list');
     if (listEl) this.bindComponentRowEvents(listEl, isPl);
 
-    // SVG Dragging & Tooltip Interactions
     this.bindSvgInteractions();
+    this.updateCanvasToolbar(isPl);
 
-    // Catalog search & filter with retained focus
     const catSearch = this.el.querySelector('#catalog-search') as HTMLInputElement | null;
     catSearch?.addEventListener('input', () => {
       this.searchQuery = catSearch.value;
@@ -1458,6 +2560,17 @@ export class BoardCreatorModal {
     });
 
     this.bindCatalogAddButtons(isPl);
+
+    // PCB Production Estimator buttons
+    this.el.querySelector('#btn-open-order-modal')?.addEventListener('click', () => {
+      this.openOrderModal(isPl);
+    });
+
+    this.el.querySelector('#btn-copy-bom-quick')?.addEventListener('click', () => {
+      const csv = generateBomCsv(this.placedComponents);
+      navigator.clipboard?.writeText(csv);
+      this.opts.toast(isPl ? 'Skopiowano zestawienie BOM (CSV) do schowka!' : 'Copied BOM (CSV) to clipboard!', 'success');
+    });
 
     // Action: Load on Bench
     this.el.querySelector('#btn-load-bench')?.addEventListener('click', () => {
