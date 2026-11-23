@@ -5134,170 +5134,32 @@ ${s.objectives.map((o: Objective, idx: number) => {
     this.toast('Pobrano plik współrzędnych montażowych SMT Pick & Place (.csv)', 'success');
   }
 
+  /** Exports the current board as a full industrial Gerber RS-274X + Excellon fabrication package (src/io/gerber). */
   private async exportGerberZip() {
-    const w = this.board.w;
-    const h = this.board.h;
-    const enc = new TextEncoder();
-    const files = new Map<string, Uint8Array>();
-
-    const toGbrCoord = (mm: number) => Math.round(mm * 10000);
-
-    // Board outline (Edge.Cuts)
-    const edgeCuts = [
-      'G04 LiveBoard Edge_Cuts Gerber RS-274X*',
-      '%FSLAX46Y46*%',
-      '%MOMM*%',
-      '%ADD10C,0.150*%',
-      'D10*',
-      `X${toGbrCoord(0)}Y${toGbrCoord(0)}D02*`,
-      `X${toGbrCoord(w)}Y${toGbrCoord(0)}D01*`,
-      `X${toGbrCoord(w)}Y${toGbrCoord(h)}D01*`,
-      `X${toGbrCoord(0)}Y${toGbrCoord(h)}D01*`,
-      `X${toGbrCoord(0)}Y${toGbrCoord(0)}D01*`,
-      'M02*',
-    ].join('\r\n');
-    files.set('Edge_Cuts.gm1', enc.encode(edgeCuts));
-
-    // Top Copper (F.Cu)
-    const fCuLines = [
-      'G04 LiveBoard Top Copper Layer F_Cu RS-274X*',
-      '%FSLAX46Y46*%',
-      '%MOMM*%',
-      '%ADD10C,0.250*%',
-      '%ADD11R,1.200X0.800*%',
-      '%ADD12C,1.400*%',
-      'D10*',
-    ];
-    for (const t of this.board.traces.filter((tr) => tr.layer === 'F')) {
-      fCuLines.push(`X${toGbrCoord(t.a[0])}Y${toGbrCoord(t.a[1])}D02*`);
-      fCuLines.push(`X${toGbrCoord(t.b[0])}Y${toGbrCoord(t.b[1])}D01*`);
-    }
-    fCuLines.push('D11*');
-    for (const c of this.board.components.filter((cp) => cp.side === 'F')) {
-      for (const pad of c.pads) {
-        const px = c.at[0] + pad.at[0];
-        const py = c.at[1] + pad.at[1];
-        fCuLines.push(`X${toGbrCoord(px)}Y${toGbrCoord(py)}D03*`);
-      }
-    }
-    fCuLines.push('M02*');
-    files.set('F_Cu.gtl', enc.encode(fCuLines.join('\r\n')));
-
-    // Bottom Copper (B.Cu)
-    const bCuLines = [
-      'G04 LiveBoard Bottom Copper Layer B_Cu RS-274X*',
-      '%FSLAX46Y46*%',
-      '%MOMM*%',
-      '%ADD10C,0.250*%',
-      '%ADD11R,1.200X0.800*%',
-      '%ADD12C,1.400*%',
-      'D10*',
-    ];
-    for (const t of this.board.traces.filter((tr) => tr.layer === 'B')) {
-      bCuLines.push(`X${toGbrCoord(t.a[0])}Y${toGbrCoord(t.a[1])}D02*`);
-      bCuLines.push(`X${toGbrCoord(t.b[0])}Y${toGbrCoord(t.b[1])}D01*`);
-    }
-    bCuLines.push('D11*');
-    for (const c of this.board.components.filter((cp) => cp.side === 'B')) {
-      for (const pad of c.pads) {
-        const px = c.at[0] + pad.at[0];
-        const py = c.at[1] + pad.at[1];
-        bCuLines.push(`X${toGbrCoord(px)}Y${toGbrCoord(py)}D03*`);
-      }
-    }
-    bCuLines.push('M02*');
-    files.set('B_Cu.gbl', enc.encode(bCuLines.join('\r\n')));
-
-    // Solder masks
-    const fMaskLines = [
-      'G04 LiveBoard Top Soldermask F_Mask RS-274X*',
-      '%FSLAX46Y46*%',
-      '%MOMM*%',
-      '%ADD11R,1.300X0.900*%',
-      'D11*',
-    ];
-    for (const c of this.board.components.filter((cp) => cp.side === 'F')) {
-      for (const pad of c.pads) {
-        fMaskLines.push(`X${toGbrCoord(c.at[0] + pad.at[0])}Y${toGbrCoord(c.at[1] + pad.at[1])}D03*`);
-      }
-    }
-    fMaskLines.push('M02*');
-    files.set('F_Mask.gts', enc.encode(fMaskLines.join('\r\n')));
-
-    const bMaskLines = [
-      'G04 LiveBoard Bottom Soldermask B_Mask RS-274X*',
-      '%FSLAX46Y46*%',
-      '%MOMM*%',
-      '%ADD11R,1.300X0.900*%',
-      'D11*',
-    ];
-    for (const c of this.board.components.filter((cp) => cp.side === 'B')) {
-      for (const pad of c.pads) {
-        bMaskLines.push(`X${toGbrCoord(c.at[0] + pad.at[0])}Y${toGbrCoord(c.at[1] + pad.at[1])}D03*`);
-      }
-    }
-    bMaskLines.push('M02*');
-    files.set('B_Mask.gbs', enc.encode(bMaskLines.join('\r\n')));
-
-    // Top Silkscreen
-    const fSilkLines = [
-      'G04 LiveBoard Top Silkscreen F_Silk RS-274X*',
-      '%FSLAX46Y46*%',
-      '%MOMM*%',
-      '%ADD10C,0.150*%',
-      'D10*',
-    ];
-    for (const c of this.board.components.filter((cp) => cp.side === 'F')) {
-      const bw = c.body.w / 2;
-      const bh = c.body.h / 2;
-      const x = c.at[0];
-      const y = c.at[1];
-      fSilkLines.push(`X${toGbrCoord(x - bw)}Y${toGbrCoord(y - bh)}D02*`);
-      fSilkLines.push(`X${toGbrCoord(x + bw)}Y${toGbrCoord(y - bh)}D01*`);
-      fSilkLines.push(`X${toGbrCoord(x + bw)}Y${toGbrCoord(y + bh)}D01*`);
-      fSilkLines.push(`X${toGbrCoord(x - bw)}Y${toGbrCoord(y + bh)}D01*`);
-      fSilkLines.push(`X${toGbrCoord(x - bw)}Y${toGbrCoord(y - bh)}D01*`);
-    }
-    fSilkLines.push('M02*');
-    files.set('F_Silkscreen.gto', enc.encode(fSilkLines.join('\r\n')));
-
-    // Excellon NC Drill
-    const drillLines = [
-      'M48',
-      'METRIC,TZ',
-      'T1C0.300',
-      'T2C0.900',
-      '%',
-      'T1',
-    ];
-    for (const v of this.board.vias) {
-      drillLines.push(`X${toGbrCoord(v.at[0])}Y${toGbrCoord(v.at[1])}`);
-    }
-    drillLines.push('M30');
-    files.set('Drill.drl', enc.encode(drillLines.join('\r\n')));
-
-    // Fabrication notes
-    const notes = [
-      '========================================================================',
-      'LiveBoard (PulsePCB Studio) — PCB Fabrication Specification',
-      '========================================================================',
-      `Project: ${this.activeScenario.meta.title} (${this.activeScenario.id})`,
-      `Board Size: ${w.toFixed(2)} mm x ${h.toFixed(2)} mm`,
-      `Layers: 2-layer FR-4 Standard (Top Cu, Bottom Cu)`,
-      `Finished Thickness: ${this.board.thickness.toFixed(2)} mm`,
-      `Surface Finish: Lead-Free HASL / ENIG`,
-      `Solder Mask: Green (default) / Matte Black`,
-      `Silkscreen: White`,
-      `Copper Weight: 1 oz (35 um)`,
-      `Minimum Track / Spacing: 0.15 mm (6 mil)`,
-      `Components Placed: ${this.board.components.length}`,
-      `Generated by LiveBoard Studio for PCBWay & JLCPCB automated ordering.`,
-      '========================================================================',
-    ].join('\r\n');
-    files.set('FABRICATION-SPEC.txt', enc.encode(notes));
-
     try {
-      const zipData = await writeZip(files);
+      const { exportGerberZip: exportGerbers, createSimpleZip } = await import('../io/gerber');
+      const res = exportGerbers(this.board, `LiveBoard-${this.activeScenario.id}`);
+      // keep the fabrication spec alongside the CAM files - it carries the project metadata
+      const w = this.board.w;
+      const h = this.board.h;
+      const notes = [
+        '========================================================================',
+        'LiveBoard (PulsePCB Studio) — PCB Fabrication Specification',
+        '========================================================================',
+        `Project: ${this.activeScenario.meta.title} (${this.activeScenario.id})`,
+        `Board Size: ${w.toFixed(2)} mm x ${h.toFixed(2)} mm`,
+        'Layers: 2-layer FR-4 Standard (Top Cu, Bottom Cu)',
+        `Finished Thickness: ${this.board.thickness.toFixed(2)} mm`,
+        'Surface Finish: Lead-Free HASL / ENIG',
+        'Solder Mask: Green (default) / Matte Black',
+        'Silkscreen: White',
+        'Copper Weight: 1 oz (35 um)',
+        'Minimum Track / Spacing: 0.15 mm (6 mil)',
+        `Components Placed: ${this.board.components.length}`,
+        'Generated by LiveBoard Studio for PCBWay & JLCPCB automated ordering.',
+        '========================================================================',
+      ].join('\r\n');
+      const zipData = createSimpleZip([...res.files, { filename: 'FABRICATION-SPEC.txt', content: notes }]);
       const blob = new Blob([zipData as BlobPart], { type: 'application/zip' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
