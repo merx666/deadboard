@@ -819,7 +819,7 @@ function renderLedSvg(w: number, h: number, name: string): { body: string; pads:
   `;
   const pads = `
     <!-- Cathode Square Pad (Pin 1) -->
-    <rect x="${-w / 2 - 0.8}" y="-0.6}" width="1.0" height="1.2" rx="0.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
+    <rect x="${-w / 2 - 0.8}" y="-0.6" width="1.0" height="1.2" rx="0.1" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
     <!-- Anode Round Pad (Pin 2) -->
     <circle cx="${w / 2 + 0.3}" cy="0" r="0.6" fill="#c88b32" stroke="#f59e0b" stroke-width="0.15" />
     <circle cx="${w / 2 + 0.3}" cy="0" r="0.25" fill="#070709" />
