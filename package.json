@@ -15,14 +15,16 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "tsx test/solve.test.ts && tsx test/spice.test.ts && tsx test/schematic.test.ts && tsx test/powertree.test.ts && tsx test/realism.test.ts && tsx test/thermal.test.ts && tsx test/intermittent.test.ts && tsx test/rework.test.ts && tsx test/authoring.test.ts && tsx test/boot.test.ts && tsx test/scope.test.ts && tsx test/camera.test.ts && tsx test/calibrate.test.ts && tsx test/kicad.test.ts && tsx test/demos.test.ts && tsx test/videos.test.ts && tsx test/mods.test.ts && tsx test/touch.test.ts && tsx test/i18n.test.ts && tsx test/catalog.test.ts && tsx test/partsbin.test.ts && tsx test/boardCreator.test.ts && tsx test/presets.test.ts && tsx test/hero3d.test.ts && tsx test/drc.test.ts && tsx test/units.test.ts && tsx test/components.test.ts && tsx test/gerber.test.ts && tsx test/autorouter.test.ts && tsx test/tools.test.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:watch": "node --import tsx --test --watch test/*.test.ts",
     "spice": "tsx src/spice/cli.ts",
     "schematic": "tsx src/io/schematic-cli.ts",
     "calibrate": "tsx src/calibrate-cli.ts",
     "demos": "tsx scripts/build-demos.ts",
     "example-mod": "tsx scripts/build-example-mod.ts",
     "videos": "tsx scripts/videos/record.ts",
-    "showcase": "tsx scripts/promo/showcase.ts"
+    "showcase": "tsx scripts/promo/showcase.ts",
+    "smoke": "tsx scripts/smoke/bench.ts"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.51",
