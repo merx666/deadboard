@@ -1,0 +1,34 @@
+# Continuous integration: typecheck + tests + build on every pull request and
+# non-main branch. The GitHub Pages deploy (pages.yml) runs only on main, after
+# these same checks have passed on the PR that produced the merge.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ['**', '!main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          # same as the Pages build, so a PR cannot pass with a build config the deploy would reject
+          VITE_FEEDBACK_TO: ${{ vars.FEEDBACK_TO }}
