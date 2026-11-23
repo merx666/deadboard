@@ -33,8 +33,8 @@ function normalizeComponent(c: Component): Component {
       burnt: !!c.state?.burnt,
       cold: Array.isArray(c.state?.cold) ? c.state.cold.filter((x) => Number.isInteger(x)) : [],
       closed: !!c.state?.closed,
-      ...(c.state?.leak && isFinite(c.state.leak.ohms) && c.state.leak.ohms > 0 && { leak: c.state.leak }),
-      ...(typeof c.state?.drift === 'number' && isFinite(c.state.drift) && c.state.drift > 0 && { drift: c.state.drift }),
+      ...(c.state?.leak && Number.isFinite(c.state.leak.ohms) && c.state.leak.ohms > 0 && { leak: c.state.leak }),
+      ...(typeof c.state?.drift === 'number' && Number.isFinite(c.state.drift) && c.state.drift > 0 && { drift: c.state.drift }),
       ...(c.state?.coldOhms && typeof c.state.coldOhms === 'object' && { coldOhms: c.state.coldOhms }),
       ...(Array.isArray(c.state?.lifted) && { lifted: c.state.lifted.filter((x) => Number.isInteger(x)) }),
       ...(Array.isArray(c.state?.netBreak) && { netBreak: c.state.netBreak.filter((x) => Number.isInteger(x)) }),
@@ -46,7 +46,7 @@ function normalizeComponent(c: Component): Component {
   };
 }
 
-const num = (v: unknown, d: number) => (typeof v === 'number' && isFinite(v) ? v : d);
+const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 function arr<T>(v: T[] | undefined): T[] { return Array.isArray(v) ? v : []; }
 const isPt = (p: unknown) => Array.isArray(p) && p.length === 2 && typeof p[0] === 'number' && typeof p[1] === 'number';
 

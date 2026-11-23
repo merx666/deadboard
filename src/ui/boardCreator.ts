@@ -67,7 +67,7 @@ export function getFootprint(partId: string, comp: PlacedComponent): { w: number
 
 /** Standard EIA 3-digit marking code for SMD resistors */
 export function getResistorCode(val?: number): string {
-  if (val === undefined || isNaN(val)) return '103';
+  if (val === undefined || Number.isNaN(val)) return '103';
   if (val === 0) return '000';
   if (val < 10) return `${val}R0`.replace('.', 'R');
   if (val < 100) return `${Math.round(val)}R`.replace('.0R', 'R');

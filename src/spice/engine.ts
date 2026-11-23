@@ -138,7 +138,7 @@ export class Engine {
       let dev: Device;
       switch (e.kind) {
         case 'R':
-          if (!(e.value !== 0 && isFinite(e.value))) throw new SpiceError(`${name}: resistance must be non-zero`);
+          if (!(e.value !== 0 && Number.isFinite(e.value))) throw new SpiceError(`${name}: resistance must be non-zero`);
           dev = new Resistor(name, N(0), N(1), e.value);
           break;
         case 'C': dev = new Capacitor(name, N(0), N(1), e.value, e.ic); break;
@@ -176,7 +176,7 @@ export class Engine {
           break;
         }
         case 'B': {
-          let ex;
+          let ex: ReturnType<typeof mapExprNodes>;
           try { ex = mapExprNodes(parseExpr(e.expr), mapNode); } catch (err) { throw new SpiceError(`${name}: ${(err as ExprError).message}`); }
           const a = N(0), b = N(1);
           const f = compileExpr(ex, (nn) => this.node(nn));
@@ -228,7 +228,7 @@ export class Engine {
       let conv = !ctx.noncon;
       for (let i = 0; i < n; i++) {
         const v = xn[i];
-        if (!isFinite(v)) return { ok: false, iters: it, singular };
+        if (!Number.isFinite(v)) return { ok: false, iters: it, singular };
         if (conv) {
           const tol = reltol * Math.max(Math.abs(v), Math.abs(ctx.x[i])) + (this.isVoltage[i] ? vntol : abstol);
           if (Math.abs(v - ctx.x[i]) > tol) conv = false;

@@ -64,7 +64,7 @@ export function waveAt(w: Waveform, t: number, tstep: number, tstop: number): nu
       const pw = w.pw > 0 ? w.pw : tstop, per = w.per > 0 ? w.per : Infinity;
       if (t < w.td) return w.v1;
       let tt = t - w.td;
-      if (isFinite(per)) tt %= per;
+      if (Number.isFinite(per)) tt %= per;
       if (tt < tr) return w.v1 + ((w.v2 - w.v1) * tt) / tr;
       if (tt < tr + pw) return w.v2;
       if (tt < tr + pw + tf) return w.v2 + ((w.v1 - w.v2) * (tt - tr - pw)) / tf;
@@ -97,7 +97,7 @@ function waveBreakpoints(w: Waveform, tstop: number, tstep: number): number[] {
     const pw = w.pw > 0 ? w.pw : tstop, per = w.per > 0 ? w.per : Infinity;
     for (let base = w.td; base < tstop && out.length < 40000; base += per) {
       out.push(base, base + tr, base + tr + pw, base + tr + pw + tf);
-      if (!isFinite(per)) break;
+      if (!Number.isFinite(per)) break;
     }
   } else if (w.type === 'pwl') {
     for (const [t] of w.pts) out.push(t);
@@ -333,7 +333,7 @@ export class Diode extends Device {
     const { IS, BV, IBV } = this.P, is = IS * this.area, nvt = this.nvt;
     const [e, de] = safeExp(vd / nvt);
     let id = is * (e - 1), gd = (is * de) / nvt;
-    if (isFinite(BV)) {
+    if (Number.isFinite(BV)) {
       const [eb, deb] = safeExp(-(vd + BV) / nvt);
       id -= IBV * this.area * eb;
       gd += (IBV * this.area * deb) / nvt;
@@ -345,7 +345,7 @@ export class Diode extends Device {
     if (this.ai !== this.a) stampG(ctx.A, this.a, this.ai, 1 / this.P.RS);
     let vd = V(x, this.ai) - V(x, this.k);
     let lim = false;
-    if (isFinite(this.P.BV) && vd < Math.min(0, -this.P.BV + 10 * this.nvt)) {
+    if (Number.isFinite(this.P.BV) && vd < Math.min(0, -this.P.BV + 10 * this.nvt)) {
       // limit in breakdown on the mirrored junction voltage
       let vr = -(vd + this.P.BV);
       [vr, lim] = pnjlim(vr, -(this.vdOld + this.P.BV), this.nvt, this.vcrit);
@@ -472,8 +472,8 @@ export class Bjt extends Device {
     const [ef, def] = safeExp(vbe / vtf), [er, der] = safeExp(vbc / vtr);
     const If = is * (ef - 1), gif = (is * def) / vtf;
     const Ir = is * (er - 1), gir = (is * der) / vtr;
-    const k = isFinite(VAF) ? Math.max(0.01, 1 - vbc / VAF) : 1;
-    const dk = isFinite(VAF) && 1 - vbc / VAF > 0.01 ? -1 / VAF : 0;
+    const k = Number.isFinite(VAF) ? Math.max(0.01, 1 - vbc / VAF) : 1;
+    const dk = Number.isFinite(VAF) && 1 - vbc / VAF > 0.01 ? -1 / VAF : 0;
     const ic = (If - Ir) * k - Ir / BR;
     const ib = If / BF + Ir / BR;
     return {

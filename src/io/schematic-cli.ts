@@ -37,7 +37,7 @@ async function main() {
   const brd = parseBrd(new Uint8Array(fs.readFileSync(brdPath)), brdPath);
   const comps = brd.board.components.filter((c) => !(c.ref.startsWith('J_') && c.kind === 'battery'));
   const nets = new Set(comps.flatMap((c) => c.pads.map((p) => p.net).filter((n): n is string => !!n)));
-  let sch;
+  let sch: ReturnType<typeof parseBomCsv> | ReturnType<typeof extractSchematic>;
   if (/\.(csv|tsv|txt)$/i.test(pdfPath)) {
     sch = parseBomCsv(new TextDecoder().decode(fs.readFileSync(pdfPath)));
     out(`parsed BOM: ${sch.parts.size} designators, ${comps.length} boardview parts in ${(performance.now() - t0).toFixed(0)} ms`);

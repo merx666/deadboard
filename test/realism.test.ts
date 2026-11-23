@@ -72,7 +72,9 @@ function run() {
     assert(esd.value !== null && esd.value > 0.35 && esd.value < 0.75, `ESD diode reading to ground (${esd.text})`);
     assert(measureDiodeDmm(b, conn, n('SIG'), n('GND')).value === null || measureDiodeDmm(b, conn, n('SIG'), n('GND')).value! > 0.9, 'reverse direction does not show a junction');
     // determinism: same placement → same text
-    assert(measureOhmsDmm(b, conn, n('OUT'), n('GND'), { seed: 'p1' }).text === measureOhmsDmm(b, conn, n('OUT'), n('GND'), { seed: 'p1' }).text, 'stable reading per placement');
+    const first = measureOhmsDmm(b, conn, n('OUT'), n('GND'), { seed: 'p1' }).text;
+    const repeat = measureOhmsDmm(b, conn, n('OUT'), n('GND'), { seed: 'p1' }).text;
+    assert(first === repeat, 'stable reading per placement');
   }
   // ---- capacitance mode: in circuit vs lifted, shorted ----
   {
