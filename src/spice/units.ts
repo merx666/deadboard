@@ -26,7 +26,7 @@ export function parseSpiceNumber(s: string): number {
 
 /** Formats a number compactly with SPICE suffixes (ngspice-compatible: uses "meg" not "M"). */
 export function formatSpiceNumber(v: number): string {
-  if (!isFinite(v)) return v > 0 ? '1e30' : v < 0 ? '-1e30' : '0';
+  if (!Number.isFinite(v)) return v > 0 ? '1e30' : v < 0 ? '-1e30' : '0';
   if (v === 0) return '0';
   const a = Math.abs(v);
   const pick: [number, string][] = [

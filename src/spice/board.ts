@@ -133,9 +133,9 @@ const toNum = (v: number | string | undefined, d: number): number => {
   if (v === undefined) return d;
   if (typeof v === 'number') return v;
   const a = parseSpiceNumber(v);
-  if (isFinite(a)) return a;
+  if (Number.isFinite(a)) return a;
   const b = parseValue(v);
-  return isFinite(b) ? b : d;
+  return Number.isFinite(b) ? b : d;
 };
 
 // ---------------- value inference (boardview placeholders) ----------------

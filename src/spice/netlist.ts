@@ -127,7 +127,7 @@ function tokenize(s: string): string[] {
 
 const num = (t: string | undefined, line: number, what: string): number => {
   const v = t === undefined ? NaN : parseSpiceNumber(t);
-  if (!isFinite(v)) throw new SpiceParseError(`expected number for ${what}, got "${t ?? ''}"`, line);
+  if (!Number.isFinite(v)) throw new SpiceParseError(`expected number for ${what}, got "${t ?? ''}"`, line);
   return v;
 };
 
@@ -137,7 +137,7 @@ function parseKV(tokens: string[]): Record<string, number> {
     const eq = t.indexOf('=');
     if (eq <= 0) continue;
     const v = parseSpiceNumber(t.slice(eq + 1));
-    if (isFinite(v)) out[t.slice(0, eq).toLowerCase()] = v;
+    if (Number.isFinite(v)) out[t.slice(0, eq).toLowerCase()] = v;
   }
   return out;
 }
@@ -150,11 +150,11 @@ function parseWave(tok: string[], line: number): Waveform {
   while (i < tok.length) {
     const t = tok[i].toLowerCase();
     if (t === 'dc') { dc = num(tok[i + 1], line, 'DC value'); i += 2; }
-    else if (t === 'ac') { i += 2; while (i < tok.length && isFinite(parseSpiceNumber(tok[i]))) i++; }
+    else if (t === 'ac') { i += 2; while (i < tok.length && Number.isFinite(parseSpiceNumber(tok[i]))) i++; }
     else if (t === 'pulse' || t === 'sin' || t === 'pwl') {
       const vals: number[] = [];
       i++;
-      while (i < tok.length && isFinite(parseSpiceNumber(tok[i]))) vals.push(parseSpiceNumber(tok[i++]));
+      while (i < tok.length && Number.isFinite(parseSpiceNumber(tok[i]))) vals.push(parseSpiceNumber(tok[i++]));
       if (t === 'pulse') {
         const [v1 = 0, v2 = 0, td = 0, tr = 0, tf = 0, pw = 0, per = 0] = vals;
         wave = { type: 'pulse', v1, v2, td, tr, tf, pw, per };
@@ -166,7 +166,7 @@ function parseWave(tok: string[], line: number): Waveform {
         for (let k = 0; k + 1 < vals.length; k += 2) pts.push([vals[k], vals[k + 1]]);
         wave = { type: 'pwl', pts };
       }
-    } else if (isFinite(parseSpiceNumber(tok[i]))) { dc = parseSpiceNumber(tok[i]); i++; }
+    } else if (Number.isFinite(parseSpiceNumber(tok[i]))) { dc = parseSpiceNumber(tok[i]); i++; }
     else i++;
   }
   return wave ?? { type: 'dc', v: dc };
@@ -262,7 +262,7 @@ export function parseSpice(text: string, hasTitle = true): Circuit & { warnings:
       case 'D': {
         need(4);
         const area = t[4] && !t[4].includes('=') ? parseSpiceNumber(t[4]) : NaN;
-        els().push({ kind: 'D', name, n: [t[1], t[2]], model: t[3], ...(isFinite(area) && { area }) });
+        els().push({ kind: 'D', name, n: [t[1], t[2]], model: t[3], ...(Number.isFinite(area) && { area }) });
         break;
       }
       case 'M': {
@@ -278,7 +278,7 @@ export function parseSpice(text: string, hasTitle = true): Circuit & { warnings:
         const model = hasSub ? t[5] : t[4];
         const at = t[hasSub ? 6 : 5];
         const area = at && !at.includes('=') ? parseSpiceNumber(at) : NaN;
-        els().push({ kind: 'Q', name, n: [t[1], t[2], t[3]], model, ...(isFinite(area) && { area }) });
+        els().push({ kind: 'Q', name, n: [t[1], t[2], t[3]], model, ...(Number.isFinite(area) && { area }) });
         break;
       }
       case 'S':

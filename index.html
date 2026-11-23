@@ -48,10 +48,10 @@
               <i></i><i></i><i></i>
               <span id="hero-frame-title">LiveBoard — interaktywne studio 3D PCB</span>
               <div class="hero-3d-toolbar">
-                <button class="hero-bar-btn active" id="hero-btn-orbit" title="Włącz / wyłącz automatyczny obrót 3D">⟳ Obrót 3D</button>
-                <button class="hero-bar-btn" id="hero-btn-top" title="Widok z góry / Top view">Góra (Top)</button>
-                <button class="hero-bar-btn" id="hero-btn-bottom" title="Widok od spodu / Bottom view">Spód (Bottom)</button>
-                <button class="hero-bar-btn" id="hero-btn-reset" title="Wyśrodkuj kamerę / Reset camera">Reset</button>
+                <button type="button" class="hero-bar-btn active" id="hero-btn-orbit" title="Włącz / wyłącz automatyczny obrót 3D">⟳ Obrót 3D</button>
+                <button type="button" class="hero-bar-btn" id="hero-btn-top" title="Widok z góry / Top view">Góra (Top)</button>
+                <button type="button" class="hero-bar-btn" id="hero-btn-bottom" title="Widok od spodu / Bottom view">Spód (Bottom)</button>
+                <button type="button" class="hero-bar-btn" id="hero-btn-reset" title="Wyśrodkuj kamerę / Reset camera">Reset</button>
                 <select id="hero-board-select" class="hero-bar-select" title="Wybierz płytkę / Select board">
                   <option value="esp32">ESP32 DevKit (Wi-Fi/3.3V)</option>
                   <option value="pico">Raspberry Pi Pico (RP2040)</option>
@@ -179,7 +179,7 @@ ok    board alive</code></pre>
             Flaga szyfrowana jest topologią połączeń — odblokuje ją wyłącznie realna, poprawna naprawa.
           </p>
         </div>
-        <pre class="term small" aria-label="Przykładowe wyzwanie"><code>$ verify
+        <pre class="term small" role="img" aria-label="Przykładowe wyzwanie"><code>$ verify
 ✗ V(TP1) = 0.42 V   oczekiwano 2.30–2.70 V
 ✗ D1 jest WYŁ       oczekiwano WŁ
 <span class="dim"># …wymiana R2 na 10 kΩ, zmostkowanie przerwanej ścieżki od spodu…</span>

@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "ignoreUnknown": true },
+  "formatter": { "enabled": false },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noAssignInExpressions": "warn",
+        "useIterableCallbackReturn": "warn",
+        "noImplicitAnyLet": "warn",
+        "noDuplicateProperties": "warn",
+        "noGlobalIsFinite": "error",
+        "noGlobalIsNan": "error"
+      },
+      "complexity": {
+        "useOptionalChain": "warn",
+        "useMathMinMax": "warn",
+        "useLiteralKeys": "warn",
+        "noCommaOperator": "warn",
+        "noUselessUndefinedInitialization": "warn",
+        "noUselessLoneBlockStatements": "warn",
+        "noImportantStyles": "off"
+      },
+      "style": { "recommended": false }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "rea-analysis/**",
+        ".superpowers/**",
+        "dist/**",
+        "docs/**",
+        "public/demos/**",
+        "public/examples/**",
+        "public/videos/**"
+      ],
+      "linter": { "enabled": false }
+    }
+  ]
+}

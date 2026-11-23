@@ -15,6 +15,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
     "test": "node --import tsx --test test/*.test.ts",
     "test:watch": "node --import tsx --test --watch test/*.test.ts",
     "spice": "tsx src/spice/cli.ts",
@@ -27,6 +28,7 @@
     "smoke": "tsx scripts/smoke/bench.ts"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
     "@webgpu/types": "^0.1.51",
     "marked": "18.1.2",
     "playwright-core": "^1.58.2",

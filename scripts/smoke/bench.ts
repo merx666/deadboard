@@ -8,7 +8,6 @@ import { chromium } from 'playwright-core';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 4199;
-const BASE = `http://127.0.0.1:${PORT}`;
 
 function assert(c: unknown, msg: string): asserts c { if (!c) throw new Error(msg); }
 

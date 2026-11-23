@@ -57,6 +57,7 @@ async function run() {
     const op = deck('d\nV1 in 0 5\nR1 in a 1k\nD1 a 0 DX\n.model DX D(IS=1e-14 N=1)\n.end').op();
     const va = op.nodes.get('a')!;
     near((5 - va) / 1000, 1e-14 * (Math.exp(va / VT) - 1), 2e-5, 'diode KCL vs Shockley');
+    // biome-ignore lint/suspicious/noApproximativeNumericConstant: expected diode Vf at 4.3 mA (~ln 2 by physics, not by intent)
     near(va, 0.693, 0.005, 'diode Vf at 4.3 mA');
   }
   // ---- zener breakdown ----
@@ -213,7 +214,7 @@ async function run() {
         const a = pinNet(conn, c, '1'), b = pinNet(conn, c, '2');
         if (a < 0 || b < 0) continue;
         const rf = measureOhms(sc.board, conn, a, b), rs = measureOhmsSpice(sc.board, conn, a, b);
-        if (!isFinite(rf)) assert(!isFinite(rs), `${sc.id} ${c.ref}: both meters read open`);
+        if (!Number.isFinite(rf)) assert(!Number.isFinite(rs), `${sc.id} ${c.ref}: both meters read open`);
         else near(rs, rf, Math.max(0.01, rf * 1e-3), `${sc.id} ${c.ref}: in-circuit ohms`);
       }
     }
