@@ -13,7 +13,6 @@ import { netAt, pickAt, type PickHit } from '../pick';
 import { runSolver, verifyScenario, type Solver, type VerifyResult } from '../verify';
 import { lockFlag, packText, topology, unpackText } from '../crypto';
 import { serializeScenario } from '../io/format';
-import { importScenarioOrPcb } from '../io/kicad';
 import { MOD_FORMAT, type ModBoard } from '../mods/mods';
 import { desktop, installMod, loadAllMods, modsFolderPath, removeInstalled, type ModLoadResult } from '../mods/sources';
 import { writeZip } from '../mods/zip';
@@ -36,9 +35,8 @@ import { BRAND, markSvg } from './logo';
 import { getBeginnerPrimerHtml, TUTORIAL_SCENARIO_IDS, getTutorialTopics, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
 import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsMobileLayout } from './touch';
 import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
-import { BoardCreatorModal } from './boardCreator';
 import { BOARD_PRESETS } from '../boards/presets';
-import { searchSupplierParts, findPartById, type ComponentPart } from '../parts/catalog';
+import type { ComponentPart } from '../parts/catalog';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
 type PanelTab = 'mission' | 'inspect' | 'studio';
@@ -322,17 +320,7 @@ export class PcbApp {
     if (params.has('automation')) this.exposeAutomation();
 
     if (params.get('action') === 'new-board' || params.has('new-board') || params.has('creator') || params.get('action') === 'order') {
-      setTimeout(() => {
-        new BoardCreatorModal({
-          onLoadScenario: (sc) => {
-            this.scenarios.push(sc);
-            this.refreshScenarioSelect();
-            this.loadScenario(sc);
-          },
-          onClose: () => {},
-          toast: (msg, kind) => this.toast(msg, kind),
-        }).show();
-      }, 50);
+      setTimeout(() => void this.openBoardCreator(), 50);
     }
 
     this.rafId = requestAnimationFrame(this.loop);
@@ -343,6 +331,7 @@ export class PcbApp {
     if (!h.startsWith('#s=')) return false;
     try {
       const json = await unpackText(h.slice(3));
+      const { importScenarioOrPcb } = await import('../io/kicad');
       const sc = importScenarioOrPcb('shared.pcbfix.json', json);
       this.scenarios.push(sc);
       this.refreshScenarioSelect();
@@ -929,6 +918,7 @@ export class PcbApp {
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { importScenarioOrPcb } = await import('../io/kicad');
         const full = importScenarioOrPcb('demo.pcbfix.json', await res.text());
         this.demoUrls.delete(sc);
         this.scenarios[idx] = sc = full;
@@ -1669,17 +1659,7 @@ export class PcbApp {
       this.modalPos = [0, 0];
       this.renderModal();
     });
-    const openCreator = () => {
-      new BoardCreatorModal({
-        onLoadScenario: (sc) => {
-          this.scenarios.push(sc);
-          this.refreshScenarioSelect();
-          this.loadScenario(sc);
-        },
-        onClose: () => {},
-        toast: (msg, kind) => this.toast(msg, kind),
-      }).show();
-    };
+    const openCreator = () => void this.openBoardCreator();
     q('#btn-creator-main')?.addEventListener('click', openCreator);
     q('#btn-creator-open')?.addEventListener('click', openCreator);
     q('#btn-creator')?.addEventListener('click', openCreator);
@@ -1839,6 +1819,7 @@ export class PcbApp {
     if (/\.zip$/i.test(f.name)) { await this.installModFile(f); return; }
     try {
       const bytes = new Uint8Array(await f.arrayBuffer());
+      const { importScenarioOrPcb } = await import('../io/kicad');
       const sc = importScenarioOrPcb(f.name, bytes);
       this.scenarios.push(sc);
       this.loadScenario(sc);
@@ -2117,15 +2098,7 @@ export class PcbApp {
       return;
     }
     if (k === 'k') {
-      new BoardCreatorModal({
-        onLoadScenario: (sc) => {
-          this.scenarios.push(sc);
-          this.refreshScenarioSelect();
-          this.loadScenario(sc);
-        },
-        onClose: () => {},
-        toast: (msg, kind) => this.toast(msg, kind),
-      }).show();
+      void this.openBoardCreator();
       return;
     }
     if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
@@ -3986,15 +3959,7 @@ export class PcbApp {
     });
     this.modalRootEl.querySelector('#cat-creator')?.addEventListener('click', () => {
       closeModal();
-      new BoardCreatorModal({
-        onLoadScenario: (sc) => {
-          this.scenarios.push(sc);
-          this.refreshScenarioSelect();
-          this.loadScenario(sc);
-        },
-        onClose: () => {},
-        toast: (msg, kind) => this.toast(msg, kind),
-      }).show();
+      void this.openBoardCreator();
     });
     this.modalRootEl.querySelector('#cat-new')?.addEventListener('click', () => this.createBlankBoard());
     this.modalRootEl.querySelector('#cat-mods')?.addEventListener('click', () => {
@@ -4293,7 +4258,8 @@ export class PcbApp {
     this.renderUI();
   }
 
-  private renderPartsBinModal() {
+  private async renderPartsBinModal(): Promise<void> {
+    const { searchSupplierParts, findPartById } = await import('../parts/catalog');
     const isPl = getLang() === 'pl';
     const targetComp = this.partsBinTargetCompId
       ? this.board.components.find((x) => x.id === this.partsBinTargetCompId) ?? null
@@ -4710,11 +4676,11 @@ export class PcbApp {
     this.mount.querySelector('#btn-feedback')?.classList.toggle('active', this.showFeedback);
     this.mount.querySelector('#btn-order-pcb')?.classList.toggle('active', this.showOrder);
     if (this.showOrder) {
-      this.renderOrderModal();
+      void this.renderOrderModal();
       return;
     }
     if (this.showPartsBin) {
-      this.renderPartsBinModal();
+      void this.renderPartsBinModal();
       return;
     }
     if (this.showBoards) {
@@ -4978,7 +4944,8 @@ ${s.objectives.map((o: Objective, idx: number) => {
     return hash;
   }
 
-  private getBoardBom() {
+  private async getBoardBom() {
+    const { findPartById, searchSupplierParts } = await import('../parts/catalog');
     const isPl = getLang() === 'pl';
     const compMap = new Map<string, {
       refs: string[];
@@ -5087,8 +5054,22 @@ ${s.objectives.map((o: Objective, idx: number) => {
     };
   }
 
-  private exportBomCsv() {
-    const bom = this.getBoardBom();
+  /** LiveBoard Studio (board creator + supplier catalog) is a heavyweight module: only load it when opened. */
+  private async openBoardCreator(): Promise<void> {
+    const { BoardCreatorModal } = await import('./boardCreator');
+    new BoardCreatorModal({
+      onLoadScenario: (sc) => {
+        this.scenarios.push(sc);
+        this.refreshScenarioSelect();
+        this.loadScenario(sc);
+      },
+      onClose: () => {},
+      toast: (msg, kind) => this.toast(msg, kind),
+    }).show();
+  }
+
+  private async exportBomCsv(): Promise<void> {
+    const bom = await this.getBoardBom();
     const rows: string[] = [
       'Item,Designators,Quantity,Component,Package,Manufacturer,MPN,LCSC Part #,PCBWay Part #,Unit Price (USD),Total (USD)',
     ];
@@ -5328,9 +5309,9 @@ ${s.objectives.map((o: Objective, idx: number) => {
     }
   }
 
-  private renderOrderModal() {
+  private async renderOrderModal(): Promise<void> {
     const isPl = getLang() === 'pl';
-    const bom = this.getBoardBom();
+    const bom = await this.getBoardBom();
 
     if (this.orderSubmitted) {
       this.modalRootEl.innerHTML = `
@@ -5411,7 +5392,7 @@ ${s.objectives.map((o: Objective, idx: number) => {
       });
       this.modalRootEl.querySelector('#btn-order-reset')?.addEventListener('click', () => {
         this.orderSubmitted = false;
-        this.renderOrderModal();
+        void this.renderOrderModal();
       });
       this.modalRootEl.querySelector('#btn-order-download-receipt')?.addEventListener('click', () => {
         const receipt = {
@@ -5671,7 +5652,7 @@ ${s.objectives.map((o: Objective, idx: number) => {
 
     // File exports
     this.modalRootEl.querySelector('#btn-order-export-gerber')?.addEventListener('click', () => void this.exportGerberZip());
-    this.modalRootEl.querySelector('#btn-order-export-bom')?.addEventListener('click', () => this.exportBomCsv());
+    this.modalRootEl.querySelector('#btn-order-export-bom')?.addEventListener('click', () => void this.exportBomCsv());
     this.modalRootEl.querySelector('#btn-order-export-cpl')?.addEventListener('click', () => this.exportCplCsv());
     this.modalRootEl.querySelector('#btn-order-export-spice')?.addEventListener('click', () => this.exportSpice());
 
