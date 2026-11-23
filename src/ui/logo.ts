@@ -20,5 +20,5 @@ export const BRAND = {
   name: 'LiveBoard',
   tagline: 'PulsePCB Studio — Interaktywne Projektowanie i Symulacja Własnych Płytek PCB',
   descriptor: 'LiveBoard (PulsePCB Studio) — Interactive PCB Design & Real-Time Simulation',
-  site: 'https://tholtman1-del.github.io/deadboard/',
+  site: 'https://merx666.github.io/deadboard/',
 } as const;

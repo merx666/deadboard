@@ -28,7 +28,7 @@ function moddingGuide(): Plugin {
     transformIndexHtml(html, ctx) {
       if (!ctx.filename.endsWith('modding.html')) return html;
       // site-relative links: the download sits next to the page
-      const src = readFileSync('docs/MODDING.md', 'utf8').replaceAll('https://tholtman1-del.github.io/deadboard/', './');
+      const src = readFileSync('docs/MODDING.md', 'utf8');
       return html.replace('<!--MODDING-->', md.parse(src) as string);
     },
     configureServer(server) {

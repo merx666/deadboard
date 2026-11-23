@@ -133,7 +133,7 @@ async function prepare(s: Show): Promise<Prep> {
 
 async function script(s: Show, prep: Prep) {
   const p = s.page;
-  const MNT = 'demo-mnt-reform2-mb30', ANT = 'demo-antmicro-jetson-nano-bb';
+  const ANT = 'demo-antmicro-jetson-nano-bb';
 
   // ---- cold open: the dead board on the thermal camera, full-bleed (prepared off camera) ----
   s.mark('hook');
@@ -258,9 +258,9 @@ async function script(s: Show, prep: Prep) {
   await s.hold(1.6);
   await s.pr('bullets', ['Free & open source', 'Runs in the browser (WebGPU)', 'Build and share your own repair challenges'], 150);
   await s.hold(1.2);
-  await s.pr('link', 'tholtman1-del.github.io/deadboard', 215, 'try it ▸ ');
+  await s.pr('link', 'merx666.github.io/deadboard', 215, 'try it ▸ ');
   await s.hold(1.6);
-  await s.pr('link', 'github.com/tholtman1-del/deadboard', 275, 'source ▸ ');
+  await s.pr('link', 'github.com/merx666/deadboard', 275, 'source ▸ ');
   await s.hold(4.2);
   s.mark('end');
 }
