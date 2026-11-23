@@ -84,6 +84,10 @@ No reference hardware is available, so realism is validated against *design inte
   bench `app.html`). `.github/workflows/pages.yml` runs `npm test` + `npm run build` and deploys
   on every push to `main`. The release carries the showcase MP4 (`docs/media/*.mp4` is
   git-ignored; upload with `gh release upload v0.1.0 <file> --clobber`).
+- **Continued at https://github.com/merx666/deadboard** (2026-11-23): tag `v0.1.0` re-anchored on
+  the initial import commit; live site https://merx666.github.io/deadboard/. Pull requests are
+  pre-checked by `.github/workflows/ci.yml` (typecheck + tests + build) before the Pages deploy
+  re-runs the same gate on `main`.
 - **Content:** 11 built-in scenarios (5 beginner lessons added 2026-11-16: Cold Joint 101,
   Solder Bridge 101, One-Way LED, Resistor & Ohm's Law, Voltage Divider 101) + 2 open-hardware
   demos (MNT Reform 2 mainboard, Antmicro Jetson baseboard; `docs/DEMOS.md`).

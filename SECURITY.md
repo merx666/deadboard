@@ -12,7 +12,7 @@ Please **do not** disclose security vulnerabilities in public GitHub issues befo
 
 Instead, report vulnerabilities through one of these private channels:
 
-- **GitHub Private Vulnerability Reporting:** Open a draft advisory at `https://github.com/tholtman1-del/deadboard/security/advisories/new`
+- **GitHub Private Vulnerability Reporting:** Open a draft advisory at `https://github.com/merx666/deadboard/security/advisories/new`
 - **Email:** Send details to **t.holtman1@gmail.com** with `[DEADBOARD Security]` in the subject line
 
 When reporting, please include:
