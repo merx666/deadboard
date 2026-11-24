@@ -323,6 +323,26 @@ export const DICT_PL: I18nDict = {
     powerState: 'Zasilanie',
   },
   scenarios: {
+    'preset-esp32-devkit': {
+      title: 'ESP32 DevKit V1 (Wi-Fi + BLE / 3.3V LDO)',
+      description: 'Oficjalna płytka ewaluacyjna ESP32 DevKit V1 z anteną meandrową PCB, metalowym ekranem RF ESP-WROOM-32, stabilizatorem AMS1117-3.3V, zabezpieczeniem wejścia USB, przyciskami EN/BOOT oraz 30 wyprowadzeniami GPIO.',
+    },
+    'preset-arduino-uno': {
+      title: 'Arduino Uno R3 (ATmega328P / 5V & 3.3V)',
+      description: 'Klasyczna płyta deweloperska Arduino Uno R3 z procesorem ATmega328P w podstawce DIP-28, gniazdem zasilania DC 9V, gniazdem USB Type-B, stabilizatorami 5.0V i 3.3V oraz diodami ON i L (D13).',
+    },
+    'preset-rpi-pico': {
+      title: 'Raspberry Pi Pico (RP2040 & RT6150B Buck-Boost)',
+      description: 'Oficjalna architektura Raspberry Pi Pico: dwurdzeniowy mikrokontroler RP2040, przetwornica impulsowa buck-boost RT6150B, pamięć QSPI Flash W25Q128, dioda LED na GP25 oraz 40 padów krawędziowych (castellated).',
+    },
+    'preset-rpi-zero': {
+      title: 'Raspberry Pi Zero 2 W (RP3A0 SiP / Wi-Fi)',
+      description: 'Zminiaturyzowany komputer jednopłytkowy Raspberry Pi Zero 2 W z 64-bitowym 4-rdzeniowym procesorem Broadcom RP3A0-AU (Cortex-A53), modułem Wi-Fi/BT, portem mini-HDMI, dwoma portami microUSB, złączem kamery CSI i 40-pinowym złączem GPIO.',
+    },
+    'preset-dcdc-buck': {
+      title: 'Regulowana przetwornica Step-Down TPS54302 (12V → 3.3V 3A)',
+      description: 'Klasyczny układ przetwornicy impulsowej ze sprzężeniem zwrotnym FB, kondensatorem bootstrap i dławikiem 4.7µH. Zbadaj kluczowanie na węźle SW oscyloskopem.',
+    },
     'builtin-first-light': {
       title: 'Pierwsze światło',
       description: 'Minilatarka: bateria guzikowa, przycisk, rezystor, czerwona dioda LED. Wciśnięcie SW1 powinno zaświecić D1 — lecz nic się nie dzieje. Znajdź usterkę, napraw ją i uruchom testy bench.',
@@ -638,6 +658,26 @@ export const DICT_EN: I18nDict = {
     powerState: 'Power',
   },
   scenarios: {
+    'preset-esp32-devkit': {
+      title: 'ESP32 DevKit V1 (Wi-Fi + BLE / 3.3V LDO)',
+      description: 'Authentic ESP32 DevKit V1 development board with serpentine PCB trace antenna, ESP-WROOM-32 metal RF shield, AMS1117-3.3 LDO regulator, USB input protection, EN/BOOT tactile switches, and 30 GPIO breakout pins.',
+    },
+    'preset-arduino-uno': {
+      title: 'Arduino Uno R3 (ATmega328P / 5V & 3.3V)',
+      description: 'Classic Arduino Uno R3 development board with socketed DIP-28 ATmega328P MCU, 9V DC barrel jack, USB Type-B interface, dual 5.0V/3.3V regulators, and ON/L (D13) LEDs.',
+    },
+    'preset-rpi-pico': {
+      title: 'Raspberry Pi Pico (RP2040 & RT6150B Buck-Boost)',
+      description: 'Official Raspberry Pi Pico architecture: dual-core RP2040 MCU, RT6150B buck-boost DC-DC converter, W25Q128 QSPI Flash, onboard GP25 LED, and 40 castellated edge pads.',
+    },
+    'preset-rpi-zero': {
+      title: 'Raspberry Pi Zero 2 W (RP3A0 SiP / Wi-Fi)',
+      description: 'Compact single-board computer featuring 64-bit quad-core Broadcom RP3A0-AU SiP (Cortex-A53), Wi-Fi/BT module, mini-HDMI, dual microUSB ports, CSI camera connector, and 40-pin GPIO header.',
+    },
+    'preset-dcdc-buck': {
+      title: 'TPS54302 Synchronous Step-Down DC-DC (12V → 3.3V 3A)',
+      description: 'High-efficiency 400kHz synchronous buck converter with FB resistor divider feedback, bootstrap capacitor, and 4.7µH power inductor. Observe switching waveforms on the SW node.',
+    },
     'builtin-first-light': {
       title: 'First Light',
       description: 'A tiny flashlight: coin cell, push button, resistor, red LED. Pressing SW1 should light D1 — but nothing happens. Find the fault, repair it, then run the test bench.',

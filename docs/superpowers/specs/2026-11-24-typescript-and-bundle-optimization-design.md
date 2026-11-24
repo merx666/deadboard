@@ -12,7 +12,7 @@
 DEADBOARD is an in-browser board-level electronics repair trainer powered by WebGPU and a real-time SPICE/MNA solver in a WebWorker. As the application grows with new features (such as industrial Gerber RS-274X export and modding systems), maintaining high runtime performance, fast page boot times on constrained mobile/desktop clients, and rigorous compile-time type safety is essential.
 
 Recent profiling and auditing by the swarm identified three key opportunities for architectural improvement:
-1. **Critical Path Payload Bloat:** A static import in `src/mods/mods.ts` dragged the ~20.5 kB KiCad parser into the initial `app.html` bundle, triggering a Vite code-splitting warning and negating lazy-loading in `src/ui/app.ts`. Additionally, all 4 full board presets (ESP32, Pico, Uno, Zero) were instantiated upfront during `init()`, forcing eager loading of ~73 kB of scenario topologies.
+1. **Critical Path Payload Bloat:** A static import in `src/mods/mods.ts` dragged the ~20.5 kB KiCad parser into the initial `app.html` bundle, triggering a Vite code-splitting warning and negating lazy-loading in `src/ui/app.ts`. Additionally, all 5 full board presets (ESP32, Pico, Uno, Zero, TPS54302 buck converter) were instantiated upfront during `init()`, forcing eager loading of ~73 kB of scenario topologies.
 2. **TypeScript Integrity Across Repo:** `tsconfig.json` was restricted to `src` and `test`, leaving the automation, showcase, and smoke scripts in `scripts/` unmonitored by `tsc --noEmit`. Furthermore, strict override inheritance was not enforced.
 3. **SPICE Domain Type Safety & Biome Hygiene:** Node identifiers, MNA indices, and power rail names were represented as primitive strings or numbers without nominal typing, creating potential for logical cross-talk. 137 Biome linter warnings existed in the repository backlog.
 
@@ -81,7 +81,7 @@ Synergize both tracks: remove bundle leaks, isolate presets chunk, extend `tscon
    - This isolates `src/io/kicad.ts` into a dedicated lazy chunk (`dist/assets/kicad-*.js`, ~20.5 kB), eliminating Vite's bundle warning completely.
 
 2. **Presets Metadata & Lazy Scenario Instantiation:**
-   - Create `src/boards/presetsMeta.ts`: defines lightweight descriptors (`id`, `name`, `desc`, `tags`) for ESP32, Raspberry Pi Pico, Arduino Uno R3, and Raspberry Pi Zero W.
+   - Create `src/boards/presetsMeta.ts`: defines lightweight descriptors (`id`, `name`, `desc`, `tags`) for ESP32, Raspberry Pi Pico, Arduino Uno R3, Raspberry Pi Zero W, and TPS54302 buck converter.
    - Update `src/ui/app.ts`: replace eager `for (const p of BOARD_PRESETS) this.scenarios.push(p.create())` with lightweight stubs registered in scenario selection. When a user selects a preset, dynamically import `../boards/presets` and instantiate `scenario.create()` on demand.
 
 ### Part B: TypeScript Compiler Hardening
