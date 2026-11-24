@@ -35,7 +35,7 @@ import { BRAND, markSvg } from './logo';
 import { getBeginnerPrimerHtml, TUTORIAL_SCENARIO_IDS, getTutorialTopics, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
 import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsMobileLayout } from './touch';
 import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
-import { BOARD_PRESETS } from '../boards/presets';
+import { BOARD_PRESET_METAS, type BoardPresetMeta } from '../boards/presetsMeta';
 import type { ComponentPart } from '../parts/catalog';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
@@ -200,6 +200,7 @@ export class PcbApp {
   private bundledIds = new Set<string>();
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
   private modBoards = new Map<Scenario, ModBoard>();
+  private presetStubs = new Map<Scenario, BoardPresetMeta>();
   private modResult: ModLoadResult = { mods: [], failed: [] };
   private schematicUrls = new Map<ModBoard, string>();
   private boardSearch = '';
@@ -284,9 +285,7 @@ export class PcbApp {
   async init() {
     this.scenarios = await builtinScenarios();
     await this.addDemoStubs();
-    for (const p of BOARD_PRESETS) {
-      this.scenarios.push(p.create());
-    }
+    this.addPresetStubs();
     this.bundledIds = new Set(this.scenarios.map((s) => s.id));
     await this.loadMods();
     this.buildDom();
@@ -836,6 +835,27 @@ export class PcbApp {
   /** Demo boards listed in demos/index.json: shown in the list, fetched when opened. */
   private demoUrls = new Map<Scenario, string>();
 
+  private addPresetStubs() {
+    const isPl = getLang() === 'pl';
+    for (const m of BOARD_PRESET_METAS) {
+      const stub: Scenario = {
+        format: 'pcbfix/1',
+        id: m.id,
+        objectives: [],
+        meta: {
+          title: isPl ? m.titlePl : m.titleEn,
+          author: 'DEADBOARD Studio',
+          difficulty: m.difficulty,
+          description: isPl ? m.descPl : m.descEn,
+          hints: [],
+        },
+        board: { w: 10, h: 10, thickness: 1.6, components: [], traces: [], vias: [], blobs: [], jumpers: [], zones: [], silk: [], texts: [], nextId: 1 },
+      };
+      this.presetStubs.set(stub, m);
+      this.scenarios.push(stub);
+    }
+  }
+
   private async addDemoStubs() {
     try {
       const res = await fetch('./demos/index.json');
@@ -899,6 +919,19 @@ export class PcbApp {
   /** Opens a scenario, fetching a demo board on first use. */
   private async openScenario(idx: number) {
     let sc = this.scenarios[idx];
+    const meta = this.presetStubs.get(sc);
+    if (meta) {
+      this.toast(`Loading ${sc.meta.title}…`, 'info');
+      try {
+        const full = await meta.load();
+        this.presetStubs.delete(sc);
+        this.scenarios[idx] = sc = full;
+      } catch (err) {
+        this.toast(`Could not load preset board: ${err instanceof Error ? err.message : err}`, 'danger');
+        this.refreshScenarioSelect();
+        return;
+      }
+    }
     const mb = this.modBoards.get(sc);
     if (mb && sc === mb.stub && !mb.stub.board.components.length) {
       this.toast(`Loading ${sc.meta.title}…`, 'info');
