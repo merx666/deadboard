@@ -2,6 +2,19 @@
 // netlist language that the engine understands, so a Circuit round-trips through
 // `writeSpice` / `parseSpice` and runs identically here and in ngspice.
 
+import type { Brand } from '../types/units';
+
+export type SpiceNode = Brand<string, 'SpiceNode'>;
+export const SPICE_GND = '0' as SpiceNode;
+export const spiceNode = (name: string): SpiceNode => name as SpiceNode;
+
+export type RailName = Brand<string, 'RailName'>;
+export const railName = (name: string): RailName => name as RailName;
+export const isRailName = (name: string): name is RailName => name.length > 0 && name !== '0';
+
+export type MnaIndex = Brand<number, 'MnaIndex'>;
+export const mnaIndex = (idx: number): MnaIndex => idx as MnaIndex;
+
 /** Node names are SPICE node names; "0" is ground. */
 export type NodeName = string;
 
