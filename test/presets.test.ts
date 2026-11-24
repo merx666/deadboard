@@ -6,6 +6,7 @@ import {
   createRaspberryPiPicoScenario,
   createRaspberryPiZeroScenario,
   createDcDcBuckScenario,
+  createAutomotiveEcuScenario,
 } from '../src/boards/presets';
 import { buildConnectivity } from '../src/connectivity';
 import { simulateSpice } from '../src/spice/adapter';
@@ -17,13 +18,14 @@ function assert(c: unknown, m: string): asserts c {
 console.log('Running Board Presets validation tests...');
 
 // 1. Verify BOARD_PRESETS registry
-assert(BOARD_PRESETS.length === 5, 'Must have exactly 5 board presets');
+assert(BOARD_PRESETS.length === 6, 'Must have exactly 6 board presets');
 const presetIds = BOARD_PRESETS.map((p) => p.id);
 assert(presetIds.includes('preset-esp32-devkit'), 'Registry contains ESP32 DevKit preset');
 assert(presetIds.includes('preset-arduino-uno'), 'Registry contains Arduino Uno preset');
 assert(presetIds.includes('preset-rpi-pico'), 'Registry contains Raspberry Pi Pico preset');
 assert(presetIds.includes('preset-rpi-zero'), 'Registry contains Raspberry Pi Zero 2 W preset');
 assert(presetIds.includes('preset-dcdc-buck'), 'Registry contains TPS54302 Buck preset');
+assert(presetIds.includes('preset-automotive-ecu'), 'Registry contains Automotive ECU preset');
 
 // 2. Validate ESP32 DevKit V1
 const espSc = createEsp32DevScenario();
@@ -147,7 +149,33 @@ assert(cam !== undefined, 'CSI camera connector exists');
 const buckSc = createDcDcBuckScenario();
 assert(buckSc.board.w === 76 && buckSc.board.h === 44, 'Buck dimensions are 76 x 44 mm');
 
-// 7. Test Connectivity and SPICE Solvability for all 5 presets
+// 7. Validate Automotive Powertrain ECU (EDC Architecture)
+const ecuSc = createAutomotiveEcuScenario();
+const ecuB = ecuSc.board;
+assert(ecuB.w === 100.0 && ecuB.h === 60.0, 'ECU board dimensions are 100.0 x 60.0 mm');
+assert(ecuB.color === '#1b3b2b', 'ECU has dark automotive green solder mask');
+
+const j1Bat = ecuB.components.find((c) => c.ref === 'J1_BAT');
+assert(j1Bat !== undefined && j1Bat.value === 12.0, 'KL30 Battery 12V terminal header exists');
+
+const f1 = ecuB.components.find((c) => c.ref === 'F1');
+assert(f1 !== undefined && f1.value === 5.0, '5A blade fuse exists');
+
+const d1Tvs = ecuB.components.find((c) => c.ref === 'D1_TVS');
+assert(d1Tvs !== undefined, 'TVS protection diode exists');
+
+const swIgn = ecuB.components.find((c) => c.ref === 'SW1_IGN');
+assert(swIgn !== undefined, 'KL15 ignition switch exists');
+
+const uLdo = ecuB.components.find((c) => c.ref === 'U1_LDO');
+const uSens = ecuB.components.find((c) => c.ref === 'U2_SENS');
+assert(uLdo !== undefined && uSens !== undefined, 'Main 5V LDO and 5V Sensor Rail regulators exist');
+
+const qInj = ecuB.components.find((c) => c.ref === 'Q1_INJ');
+const dFly = ecuB.components.find((c) => c.ref === 'D4_FLY');
+assert(qInj !== undefined && dFly !== undefined, 'Injector power stage with flyback diode exists');
+
+// 8. Test Connectivity and SPICE Solvability for all 6 presets
 for (const preset of BOARD_PRESETS) {
   const sc = preset.create();
   const conn = buildConnectivity(sc.board);
@@ -156,4 +184,4 @@ for (const preset of BOARD_PRESETS) {
   assert(spice.V.length > 0, `Preset ${preset.id} successfully solves in SPICE`);
 }
 
-console.log('Board Presets: ESP32 DevKit V1, Arduino Uno R3, RPi Pico, RPi Zero 2 W, and Buck SPICE — ok');
+console.log('Board Presets: ESP32 DevKit V1, Arduino Uno R3, RPi Pico, RPi Zero 2 W, Buck SPICE, and Automotive ECU — ok');

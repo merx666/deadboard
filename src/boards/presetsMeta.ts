@@ -63,4 +63,14 @@ export const BOARD_PRESET_METAS: BoardPresetMeta[] = [
     difficulty: 3,
     load: async () => (await import('./presets')).createDcDcBuckScenario(),
   },
+  {
+    id: 'preset-automotive-ecu',
+    titlePl: 'Sterownik silnika ECU (Architektura EDC / 12V)',
+    titleEn: 'Automotive Powertrain ECU (EDC Architecture / 12V)',
+    descPl: 'Przemysłowy sterownik ECU ze stałym zasilaniem KL30 12V, linią zapłonu KL15, ochroną TVS, regulatorem 5V sensorów i sterowaniem wtryskiwaczem.',
+    descEn: 'Industrial ECU board with KL30 12V battery, KL15 ignition switch, TVS protection, 5V sensor rail, and solenoid injector driver.',
+    category: 'power',
+    difficulty: 3,
+    load: async () => (await import('./presets')).createAutomotiveEcuScenario(),
+  },
 ];

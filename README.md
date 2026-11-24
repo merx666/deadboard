@@ -75,6 +75,7 @@ flowchart TD
   subgraph UI ["Workbench and UI Controllers (src/ui/)"]
     PcbApp["PcbApp Host<br/>app.ts · 60/120Hz RAF Loop and Undo Stack"]
     Tools["Bench Instruments<br/>6000-count DMM · Roll Scope · Lab PSU · Rework Iron"]
+    Panels["Modular Panel Controllers<br/>InspectPanel · MissionPanel · StudioPanel"]
     Modals["Modular Modal Controllers<br/>Order · PartsBin · Boards · Mods · Report · Shortcuts · Help · Feedback"]
     Creator["CAD Board Creator<br/>Interactive DRC and 45° Autorouter"]
   end
@@ -104,6 +105,7 @@ flowchart TD
 
   %% Data Flow and Interconnections
   Tools -->|User actions and probe telemetry| PcbApp
+  Panels -->|Inspection, mission state, and studio authoring| PcbApp
   Modals -->|Order checkout and part swaps| PcbApp
   Creator -->|Custom PCB layout netlist| PcbApp
   
@@ -142,8 +144,10 @@ flowchart TD
 
 1. **Workbench & UI Controllers** (`src/ui/`):
    - `PcbApp`: Główny orkiestrator stołu warsztatowego, pętla animacji 60/120 Hz (`requestAnimationFrame`), stos cofania operacji (Undo/Redo).
-   - Zdekomponowane kontrolery modalne: `OrderModalController` (fabrykacja i BOM), `PartsBinModalController` (magazyn podzespołów LCSC), `ReportModalController` (protokoły badań), `ShortcutsModalController`, `HelpModalController`, `BoardCreatorModal`.
-   - Wirtualne przyrządy pomiarowe: multimetr cyfrowy 6000 zliczeń, oscyloskop w trybie Roll/Auto, zasilacz laboratoryjny z wstrzykiwaniem napięcia oraz zestaw kolb lutowniczych.
+   - Zdekomponowane kontrolery panelowe: `InspectPanelController` (inspekcja elementów, kody paskowe, prace serwisowe i usterki), `MissionPanelController` (cele misji, weryfikacja, wskazówki), `StudioPanelController` (tworzenie wyzwań i eksport).
+   - Zdekomponowane kontrolery modalne: `OrderModalController` (fabrykacja i BOM), `PartsBinModalController` (magazyn podzespołów LCSC), `ReportModalController` (protokoły badań), `ShortcutsModalController`, `HelpModalController`, `BoardsModalController`, `ModsModalController`, `FeedbackModalController`.
+   - Wirtualne przyrządy pomiarowe: multimetr cyfrowy 6000 zliczeń z trybem HOLD i REL Δ, oscyloskop w trybie Roll/Auto z pauzą RUN/STOP, zasilacz laboratoryjny z wstrzykiwaniem prądowym oraz zestaw kolb lutowniczych.
+   - Płytki wzorcowe (Presets): ESP32 DevKit V1, Arduino Uno R3, Raspberry Pi Pico, Raspberry Pi Zero 2 W, przetwornica TPS54302 Buck oraz przemysłowy sterownik silnika ECU (architektura EDC 12V z KL30/KL15 i stopniem mocy wtryskiwacza).
 2. **Simulation & Multi-Physics Solvers** (`src/sim.ts`, `src/spice/`, `src/thermal.ts`):
    - **Fast MNA Solver**: Szybka analiza węzłowa BFS z automatyczną detekcją i izolacją odłączonych gałęzi oraz otwartych przełączników (0.000 V na pływających szynach).
    - **SPICE Engine**: Pełny silnik nieliniowy rozwiązujący stany nieustalone (transient), tętnienia przetwornic DC-DC, sekwencjonowanie szyn zasilania (`powertree.ts`).

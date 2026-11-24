@@ -918,6 +918,130 @@ export function createDcDcBuckScenario(): Scenario {
   };
 }
 
+export function createAutomotiveEcuScenario(): Scenario {
+  const b = new Builder(100, 60);
+
+  // 1. Terminal 30 (12V Battery Header)
+  const j1 = b.header('J1_BAT', 12.0, [10, 30], 0, 'KL30 12V');
+  b.text([10, 22], 'KL30 BAT 12V');
+
+  // 2. Automotive Fuse (Blade Fuse 5A)
+  const f1 = b.fuse('F1', 5.0, [22, 30], 0);
+  b.text([22, 24], '5A BLADE');
+
+  // 3. TVS / Reverse Protection Diode (SMBJ14A)
+  // Cathode (pad 1) to +12V_PROT, Anode (pad 2) to GND
+  const d1 = b.diode('D1_TVS', [22, 16], 90);
+  b.text([22, 9], 'SMBJ14A TVS');
+
+  // 4. Reservoir Capacitor (470uF 25V)
+  const c1 = b.resistor('C1_RES', 0.05, [34, 16]);
+  b.text([34, 9], '470uF 25V');
+
+  // 5. Ignition Switch (Terminal 15)
+  const swIgn = b.tactile('SW1_IGN', [34, 30]);
+  b.text([34, 37], 'KL15 IGN');
+
+  // 6. Automotive 5V LDO (TLE4275 / LM2940)
+  const uLdo = b.resistor('U1_LDO', 0.02, [48, 30]);
+  b.text([48, 24], 'TLE4275 5V');
+
+  // 7. Power LED (Green) + Resistor (330 Ohm)
+  const rPwr = b.resistor('R1_PWR', 330, [48, 40]);
+  const dPwr = b.led('D2_PWR', 'green', [48, 48]);
+  b.text([48, 54], 'ECU PWR');
+
+  // 8. Protected 5V Sensor Rail LDO/Buffer
+  const uSens = b.resistor('U2_SENS', 0.02, [62, 30]);
+  b.text([62, 24], '5V SENSOR RAIL');
+
+  // Sensor LED (Blue) + Resistor (330 Ohm)
+  const rSens = b.resistor('R2_SENS', 330, [62, 40]);
+  const dSens = b.led('D3_SENS', 'blue', [62, 48]);
+  b.text([62, 54], 'SENS 5V');
+
+  // 9. Analog Sensor Divider (MAP / Temp sensor input)
+  const rTop = b.resistor('R3_MAP', 4700, [74, 18]);
+  const rBot = b.resistor('R4_MAP', 2200, [74, 30]);
+  b.text([74, 11], '4.7k PULLUP');
+  b.text([74, 24], '2.2k MAP');
+
+  // 10. Low-side Injector Power Switch & Inductive Flyback Diode
+  const qInj = b.resistor('Q1_INJ', 0.05, [86, 30]);
+  b.text([86, 24], 'INJ MOSFET');
+  const dFly = b.diode('D4_FLY', [86, 16], 90);
+  b.text([86, 9], 'UF4007 CLAMP');
+
+  // Injector indicator LED (Yellow) + Resistor (470 Ohm)
+  const rInj = b.resistor('R5_INJ', 470, [86, 40]);
+  const dInj = b.led('D5_INJ', 'yellow', [86, 48]);
+  b.text([86, 54], 'INJ ACTIVE');
+
+  // Test Points
+  const tpBat = b.testpoint('TP_BAT', [10, 42], 'KL30_12V');
+  const tpIgn = b.testpoint('TP_IGN', [34, 46], 'KL15_IGN');
+  const tp5v = b.testpoint('TP_5V', [48, 16], '5V_VCC');
+  const tpSens = b.testpoint('TP_SENS', [62, 16], '5V_SENS');
+  const tpMap = b.testpoint('TP_MAP', [74, 42], 'MAP_SIG');
+  const tpInj = b.testpoint('TP_INJ', [86, 4], 'INJ_DRV');
+  const tpGnd = b.testpoint('TP_GND', [10, 16], 'GND');
+
+  // Top wiring (traces)
+  b.track('F', [b.pad(j1, '1'), b.pad(tpBat, '1'), b.pad(f1, '1')], 1.5, '12V_BAT');
+  b.track('F', [b.pad(f1, '2'), b.pad(d1, '1'), b.pad(c1, '1'), b.pad(swIgn, '1'), [34, 12], [86, 12], b.pad(dFly, '1')], 1.5, '12V_PROT');
+  b.track('F', [b.pad(swIgn, '2'), b.pad(tpIgn, '1'), b.pad(uLdo, '1')], 1.2, 'KL15_IGN');
+  b.track('F', [b.pad(uLdo, '2'), b.pad(tp5v, '1'), b.pad(rPwr, '1'), b.pad(uSens, '1'), b.pad(rTop, '1')], 1.0, '5V_VCC');
+  b.track('F', [b.pad(rPwr, '2'), b.pad(dPwr, '2')], 0.6, 'PWR_LED');
+  b.track('F', [b.pad(uSens, '2'), b.pad(tpSens, '1'), b.pad(rSens, '1')], 0.8, '5V_SENS');
+  b.track('F', [b.pad(rSens, '2'), b.pad(dSens, '2')], 0.6, 'SENS_LED');
+  b.track('F', [b.pad(rTop, '2'), b.pad(rBot, '1'), b.pad(tpMap, '1')], 0.5, 'MAP_SIG');
+  b.track('F', [b.pad(qInj, '1'), b.pad(dFly, '2'), b.pad(tpInj, '1'), b.pad(rInj, '1')], 1.2, 'INJ_DRV');
+  b.track('F', [b.pad(rInj, '2'), b.pad(dInj, '2')], 0.6, 'INJ_LED');
+
+  // Bottom Ground Bus
+  b.track('B', [
+    b.pad(j1, '2'),
+    b.pad(tpGnd, '1'),
+    b.pad(d1, '2'),
+    b.pad(c1, '2'),
+    b.pad(dPwr, '1'),
+    b.pad(dSens, '1'),
+    b.pad(dInj, '1'),
+    b.pad(rBot, '2'),
+    b.pad(qInj, '2')
+  ], 1.5, 'GND');
+
+  // Silkscreen Titles
+  b.text([50, 4], 'AUTOMOTIVE POWERTRAIN ECU (EDC DIESEL/GASOLINE BENCH)', 1.5);
+  b.text([50, 58], 'KL30 BATTERY · KL15 IGNITION · 5V SENSORS · SOLENOID INJECTOR STAGE', 1.1);
+
+  const board = b.b;
+  board.color = '#1b3b2b'; // Dark automotive ECU green
+
+  return {
+    format: 'pcbfix/1',
+    id: 'preset-automotive-ecu',
+    meta: {
+      title: 'Sterownik silnika ECU (Architektura EDC / 12V)',
+      author: 'DEADBOARD Automotive Lab',
+      difficulty: 3,
+      description: 'Przemysłowy sterownik wtrysku i zasilania ECU: stałe zasilanie 12V (KL30), linia zapłonu (KL15), dioda zabezpieczająca TVS, bezpiecznik 5A, stabilizator 5V logiczny i referencyjny sensorów oraz stopień mocy wtryskiwacza z diodą gaszącą.',
+      hints: [
+        'Podłącz zasilanie 12V do J1_BAT i zbadaj obecność 12V na bezpieczniku F1 oraz diodzie TVS D1.',
+        'Włącz zapłon naciskając przełącznik SW1_IGN (KL15), aby podać napięcie na stabilizator U1_LDO.',
+        'Zweryfikuj obecność stabilnego 5.0V na TP_5V oraz 5V na szynie czujników TP_SENS.',
+        'Sprawdź diodę gaszącą D4_FLY oraz stopień sterowania wtryskiwaczem na węźle INJ_DRV.'
+      ],
+      credits: 'Automotive Powertrain EDC Architecture Standard',
+      license: 'Apache-2.0'
+    },
+    board,
+    objectives: [
+      { type: 'voltage', a: '5V_VCC', min: 4.80, max: 5.25 }
+    ]
+  };
+}
+
 export const BOARD_PRESETS: BoardPreset[] = [
   {
     id: 'preset-esp32-devkit',
@@ -963,5 +1087,14 @@ export const BOARD_PRESETS: BoardPreset[] = [
     descEn: 'High efficiency 400kHz synchronous buck regulator with FB voltage divider and bootstrap cap.',
     category: 'power',
     create: createDcDcBuckScenario
+  },
+  {
+    id: 'preset-automotive-ecu',
+    titlePl: 'Sterownik silnika ECU (Architektura EDC / 12V)',
+    titleEn: 'Automotive Powertrain ECU (EDC Architecture / 12V)',
+    descPl: 'Przemysłowy sterownik ECU ze stałym zasilaniem KL30 12V, linią zapłonu KL15, ochroną TVS, regulatorem 5V sensorów i sterowaniem wtryskiwaczem.',
+    descEn: 'Industrial ECU board with KL30 12V battery, KL15 ignition switch, TVS protection, 5V sensor rail, and solenoid injector driver.',
+    category: 'power',
+    create: createAutomotiveEcuScenario
   }
 ];

@@ -1,12 +1,11 @@
 import { BOARD_PRESET_METAS, type BoardPresetMeta } from '../boards/presetsMeta';
 import { BootController, type RequiredRail, requiredRails } from '../boot';
 import { buildConnectivity, type Conn } from '../connectivity';
-import { lockFlag, packText, topology, unpackText } from '../crypto';
-import { type FaultClass, listFaults } from '../faults';
+import { unpackText } from '../crypto';
+import type { FaultClass } from '../faults';
 import { dist, transform4 } from '../geom';
 import { getLang, t as i18n, setLang, translateScenario } from '../i18n';
 import { FlexField, settleIntermittents, updateIntermittents } from '../intermittent';
-import { serializeScenario } from '../io/format';
 import { fmtOhm, fmtSI, marking, padWorld } from '../model';
 import type { ModBoard } from '../mods/mods';
 import { installMod, loadAllMods, type ModLoadResult } from '../mods/sources';
@@ -27,7 +26,7 @@ import { writeSpice } from '../spice/netlist';
 import { discoverPowerTree, type PowerTree, railVoltage } from '../spice/powertree';
 import type { PowerStateName } from '../spice/sequencer';
 import { apparentTemp, EMISSIVITY, ThermalModel } from '../thermal';
-import type { Board, Component, Objective, Scenario, Side, V2 } from '../types';
+import type { Board, Component, Scenario, Side, V2 } from '../types';
 import { runSolver, type Solver, type VerifyResult, verifyScenario } from '../verify';
 import { setContinuityBeep, setSoundEnabled, sfxBeep, sfxBlow, sfxClick, sfxCut, sfxProbe, sfxRelay, sfxSolder, sfxWin, soundEnabled } from './audio';
 import { type FeedbackContext, mountFeedbackForm } from './feedback';
@@ -42,6 +41,8 @@ import { PartsBinModalController } from './modals/partsBinModal';
 import { ReportModalController } from './modals/reportModal';
 import { ShortcutsModalController } from './modals/shortcutsModal';
 import { InspectPanelController } from './panels/inspectPanel';
+import { MissionPanelController } from './panels/missionPanel';
+import { StudioPanelController } from './panels/studioPanel';
 import { splitLead, TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, touchCopy, wantsMobileLayout } from './touch';
 import { getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, TUTORIAL_SCENARIO_IDS, type TutorialStep } from './tutorial';
 
@@ -72,8 +73,6 @@ const TOOLS: { id: ToolId; key: string; ico: string; lbl: string; tip: string }[
   { id: 'scope', key: 'o', ico: 'scope', lbl: 'Oscilloscope', tip: 'Clip the scope probe (CH1) on a net: rail ramps and boot loops (Roll), switching nodes, ripple and clocks (Auto)' },
   { id: 'press', key: 'b', ico: 'hand', lbl: 'Press / flex', tip: 'Press on the board for 2.5 s: reveals cracked joints that open or close under flex' },
 ];
-
-const fmtDur = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 function cloneBoard(b: Board): Board {
   return structuredClone(b);
@@ -210,6 +209,8 @@ export class PcbApp {
   private showPartsBin = false;
   private partsBinModal: PartsBinModalController | null = null;
   private inspectPanel: InspectPanelController | null = null;
+  private missionPanel: MissionPanelController | null = null;
+  private studioPanel: StudioPanelController | null = null;
   /** Ids of the boards that ship with LiveBoard (built-ins + demos): an author's copy needs its own id. */
   private bundledIds = new Set<string>();
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
@@ -3156,166 +3157,40 @@ export class PcbApp {
     }
   }
 
-  private renderMissionTab() {
-    const s = this.activeScenario;
-    const isPl = getLang() === 'pl';
-    const tr = translateScenario(s.id, s.meta.title, s.meta.description);
-    const hints = i18n().scenarios[s.id]?.hints ?? s.meta.hints;
-    const v = this.lastVerify;
-    const inTutTrack = isTutorialScenario(s.id);
+  private getMissionPanel(): MissionPanelController {
+    if (!this.missionPanel) {
+      this.missionPanel = new MissionPanelController({
+        getActiveScenario: () => this.activeScenario,
+        getLastVerify: () => this.lastVerify,
+        getMoves: () => this.moves,
+        getHintsShown: () => this.hintsShown,
+        getSolvedIds: () => this.solvedIds,
+        getScenarios: () => this.scenarios,
+        getRevealedFlag: () => this.revealedFlag,
+        isTutorialOpen: () => this.tutorialOpen,
+        getSideBodyEl: () => this.sideBodyEl,
+        getModBoards: () => this.modBoards,
+        getVideos: () => this.videos,
 
-    this.sideBodyEl.innerHTML = `
-      <div class="card">
-        <div class="card-title lg">
-          <span>${this.esc(tr.title)}</span>
-          <span class="badge info">${this.moves}${s.meta.par ? ` / ${s.meta.par}` : ''} ${isPl ? 'ruchów' : 'moves'}</span>
-        </div>
-        <div class="row" style="justify-content:space-between">
-          <span class="muted">${isPl ? 'Autor' : 'By'}: ${this.esc(s.meta.author)}</span>
-          <span class="lvl" title="Difficulty ${s.meta.difficulty}/5">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.meta.difficulty ? 'on' : ''}"></i>`).join('')}</span>
-        </div>
-        <div class="text-2">${this.esc(this.txt(tr.description))}</div>
-        ${s.meta.credits ? `
-          <div class="credits">
-            <span>${this.esc(s.meta.credits)}</span>
-            <span class="mono">${s.meta.license ? `Licence: ${this.esc(s.meta.license)}` : ''}${s.meta.source ? ` · <a href="${this.esc(s.meta.source.split(' @ ')[0])}" target="_blank" rel="noopener">source${s.meta.source.includes(' @ ') ? ` @ ${this.esc(s.meta.source.split(' @ ')[1])}` : ''}</a>` : ''}</span>
-          </div>
-        ` : ''}
-        ${this.modBoards.get(s)?.schematic ? `
-          <div class="row wrap" style="margin-top:8px">
-            <button class="btn sm" id="open-schematic">${icon('book', 12)}<span>${isPl ? 'Schemat ideowy' : 'Schematic'}</span></button>
-            <span class="muted">from the mod "${this.esc(this.modBoards.get(s)!.mod.name)}"</span>
-          </div>
-        ` : ''}
-        ${this.videos[s.id] ? `
-          <div class="walkthrough">
-            <span class="walk-title">${isPl ? 'Wideo instruktażowe' : 'Walkthrough'}</span>
-            <div class="row wrap">
-              <button class="btn sm primary" id="vid-approach">${icon('play', 12)}<span>${isPl ? 'Jak podejść do problemu' : 'How to approach'} · ${fmtDur(this.videos[s.id].approach.seconds)}</span></button>
-              <button class="btn sm" id="vid-solution">${isPl ? 'Pokaż rozwiązanie' : 'Show solution'}</button>
-            </div>
-          </div>
-        ` : ''}
-        ${!this.tutorialOpen && inTutTrack ? `
-          <button class="btn sm block" id="btn-start-tut">${icon('book', 13)}<span>${isPl ? 'Uruchom interaktywny samouczek' : 'Start interactive beginner tutorial'}</span></button>
-        ` : ''}
-        ${!inTutTrack ? `
-          <button class="btn sm block" id="btn-open-catalog">${icon('grid', 13)}<span>${isPl ? 'Przeglądaj wszystkie płytki i zadania' : 'Browse all boards &amp; tutorials'}</span></button>
-        ` : ''}
-      </div>
-
-      ${inTutTrack ? `
-        <div class="card">
-          <div class="card-title">
-            <span>${isPl ? 'Ścieżka dla początkujących' : 'Beginner tutorial track'}</span>
-            <div class="row">
-              <span class="badge info">${TUTORIAL_SCENARIO_IDS.filter((id) => this.solvedIds.has(id)).length}/${TUTORIAL_SCENARIO_IDS.length}</span>
-              <button class="btn sm" id="btn-open-catalog">${isPl ? 'Wszystkie płytki' : 'All boards'}</button>
-            </div>
-          </div>
-          <div class="stack">
-            ${TUTORIAL_SCENARIO_IDS.map((id, idx) => {
-              const scIdx = this.scenarios.findIndex((x) => x.id === id);
-              const scItem = scIdx >= 0 ? this.scenarios[scIdx] : null;
-              if (!scItem) return '';
-              const isCur = id === s.id;
-              const isDone = this.solvedIds.has(id);
-              const scTr = translateScenario(scItem.id, scItem.meta.title, scItem.meta.description);
-              return `
-                <button class="list-btn" data-open-sc="${scIdx}" style="${isCur ? 'background:var(--accent-weak);border:1px solid var(--accent-line)' : ''}">
-                  <span><b>${idx + 1}.</b> ${this.esc(scTr.title)}</span>
-                  ${isDone ? `<span class="badge pass">${isPl ? 'Zrobione' : 'Done'}</span>` : isCur ? `<span class="badge info">${isPl ? 'Aktywna' : 'Active'}</span>` : `<span class="sub">L1</span>`}
-                </button>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${this.revealedFlag ? `
-        <div class="flag-box">
-          <div class="card-title" style="color:var(--accent)">
-            <span class="row">${icon('flag', 14)}<span>${isPl ? 'Flaga odblokowana!' : 'Flag unlocked'}</span></span>
-            <button class="btn sm" id="btn-copy-flag">${icon('copy', 13)}<span>${isPl ? 'Kopiuj' : 'Copy'}</span></button>
-          </div>
-          <div class="flag-code" id="flag-txt">${this.esc(this.revealedFlag)}</div>
-        </div>
-      ` : ''}
-
-      <div class="card">
-        <div class="card-title">
-          <span>${isPl ? 'Cele testowe' : 'Objectives'}</span>
-          <button class="btn sm primary" id="btn-panel-verify">${icon('play', 12)}<span>${isPl ? 'Uruchom testy' : 'Run tests'}</span></button>
-        </div>
-        ${s.objectives.length === 0 ? `<div class="muted">${isPl ? 'Brak zdefiniowanych celów.' : 'No objectives defined.'}</div>` : ''}
-        ${(v ? v.results : s.objectives.map((o) => ({
-          objective: o,
-          label: o.type === 'led' ? `${o.ref} ${isPl ? (o.on ? 'musi ŚWIECIĆ' : 'musi być ZGASZONA') : `must be ${o.on ? 'ON' : 'OFF'}`}` : `V(${o.a}${o.b ? `−${o.b}` : ''}) ∈ [${o.min}, ${o.max}] V`,
-          passed: false,
-          detail: isPl ? 'Uruchom testy, aby sprawdzić' : 'Run tests to verify',
-        }))).map((r) => `
-          <div class="obj-row ${v ? (r.passed ? 'pass' : 'fail') : ''}">
-            <div>
-              <div class="t">${this.esc(r.label)}</div>
-              <div class="d">${this.esc(r.detail)}</div>
-            </div>
-            ${v ? `<span class="badge ${r.passed ? 'pass' : 'fail'}">${r.passed ? (isPl ? 'Zaliczono' : 'Pass') : (isPl ? 'Błąd' : 'Fail')}</span>` : ''}
-          </div>
-        `).join('')}
-        ${v && v.overloads.length > 0 ? `
-          <div class="obj-row fail">
-            <div>
-              <div class="t">${isPl ? 'Przeciążenie termiczne / prądowe' : 'Thermal / current overload'}</div>
-              <div class="d">${v.overloads.map((o) => `${this.esc(o.ref)}: ${this.esc(o.msg)}`).join('; ')}</div>
-            </div>
-            <span class="badge fail">${isPl ? 'Usterka' : 'Fault'}</span>
-          </div>
-        ` : ''}
-      </div>
-
-      ${hints && hints.length > 0 ? `
-        <div class="card">
-          <div class="card-title">
-            <span>${isPl ? 'Wskazówki' : 'Notes'} (${this.hintsShown}/${hints.length})</span>
-            ${this.hintsShown < hints.length ? `<button class="btn sm" id="btn-next-hint">${isPl ? 'Odkryj wskazówkę' : 'Reveal note'}</button>` : ''}
-          </div>
-          ${hints.slice(0, this.hintsShown).map((h, i) => `
-            <div class="hint-item"><b>${i + 1}.</b> ${this.esc(this.txt(h))}</div>
-          `).join('')}
-          ${this.hintsShown === 0 ? `<div class="muted">${isPl ? 'Dostępne są progresywne wskazówki laboratoryjne.' : 'Progressive diagnostic notes are available if needed.'}</div>` : ''}
-        </div>
-      ` : ''}
-    `;
-
-    this.sideBodyEl.querySelector('#btn-panel-verify')?.addEventListener('click', () => void this.runVerify());
-    this.sideBodyEl.querySelector('#btn-start-tut')?.addEventListener('click', () => this.startTutorial());
-    this.sideBodyEl.querySelector('#btn-open-catalog')?.addEventListener('click', () => this.openBoardCatalog());
-    this.sideBodyEl.querySelectorAll<HTMLButtonElement>('[data-open-sc]').forEach((b) => {
-      b.addEventListener('click', () => {
-        const idx = Number(b.dataset.openSc);
-        if (this.scenarios[idx]) void this.openScenario(idx);
+        esc: (s) => this.esc(s),
+        txt: (s) => this.txt(s),
+        toast: (msg, kind) => this.toast(msg, kind),
+        runVerify: () => this.runVerify(),
+        startTutorial: () => this.startTutorial(),
+        openBoardCatalog: () => this.openBoardCatalog(),
+        openScenario: (idx) => this.openScenario(idx),
+        openSchematic: (s) => this.openSchematic(s),
+        playVideo: (id, which) => this.playVideo(id, which),
+        setHintsShown: (n) => {
+          this.hintsShown = n;
+        },
       });
-    });
-    this.sideBodyEl.querySelector('#open-schematic')?.addEventListener('click', () => void this.openSchematic(s));
-    this.sideBodyEl.querySelector('#vid-approach')?.addEventListener('click', () => this.playVideo(s.id, 'approach'));
-    const sol = this.sideBodyEl.querySelector<HTMLButtonElement>('#vid-solution');
-    sol?.addEventListener('click', () => {
-      // solutions spoil the challenge: a second, deliberate click plays it
-      if (sol.dataset.armed) { this.playVideo(s.id, 'solution'); return; }
-      sol.dataset.armed = '1';
-      sol.classList.add('warn');
-      sol.textContent = `Spoilers ahead — play solution (${fmtDur(this.videos[s.id].solution.seconds)})`;
-    });
-    this.sideBodyEl.querySelector('#btn-next-hint')?.addEventListener('click', () => {
-      this.hintsShown = Math.min(hints.length, this.hintsShown + 1);
-      this.renderMissionTab();
-    });
-    this.sideBodyEl.querySelector('#btn-copy-flag')?.addEventListener('click', async () => {
-      if (this.revealedFlag) {
-        await navigator.clipboard?.writeText(this.revealedFlag);
-        this.toast('Flag copied to clipboard', 'success');
-      }
-    });
+    }
+    return this.missionPanel;
+  }
+
+  private renderMissionTab() {
+    this.getMissionPanel().render();
   }
 
   private getInspectPanel(): InspectPanelController {
@@ -3364,197 +3239,45 @@ export class PcbApp {
     return { partTemp: (id: string) => th?.partTemp(id), flexAt: (x: number, y: number) => this.flex.at(x, y) };
   }
 
+  private getStudioPanel(): StudioPanelController {
+    if (!this.studioPanel) {
+      this.studioPanel = new StudioPanelController({
+        getActiveScenario: () => this.activeScenario,
+        getBoard: () => this.board,
+        isAuthorMode: () => this.authorMode,
+        getRefLockedHash: () => this.refLockedHash,
+        getStudioFlagInput: () => this.studioFlagInput,
+        getBundledIds: () => this.bundledIds,
+        getSideBodyEl: () => this.sideBodyEl,
+        getCamera: () => this.camera,
+
+        esc: (s) => this.esc(s),
+        toast: (msg, kind) => this.toast(msg, kind),
+        renderUI: () => this.renderUI(),
+        refreshScenarioSelect: () => this.refreshScenarioSelect(),
+        setStudioFlagInput: (flag) => {
+          this.studioFlagInput = flag;
+        },
+        setRefLockedHash: (hash) => {
+          this.refLockedHash = hash;
+        },
+        setAuthorMode: (on) => {
+          this.authorMode = on;
+        },
+        setSelectedCompId: (id) => {
+          this.selectedCompId = id;
+        },
+        setActiveTab: (tab) => {
+          this.activeTab = tab;
+        },
+        exportBoardAsMod: () => void this.getModsModal().exportBoardAsMod(),
+      });
+    }
+    return this.studioPanel;
+  }
+
   private renderStudioTab() {
-    const s = this.activeScenario;
-    const leds = this.board.components.filter((c) => c.kind === 'led').map((c) => c.ref);
-    const probes = this.board.components.map((c) => c.ref);
-    const faulted = this.board.components.map((c) => ({ c, faults: listFaults(c) })).filter((x) => x.faults.length);
-
-    this.sideBodyEl.innerHTML = `
-      <div class="card">
-        <div class="card-title">
-          <span>Scenario metadata</span>
-          <span class="badge info">${this.refLockedHash ? `#${this.refLockedHash}` : s.lock ? 'Locked' : 'Draft'}</span>
-        </div>
-        <div class="muted">
-          1. Build, repair, or import a working board.<br/>
-          2. Define objectives and lock a reference flag.<br/>
-          3. Inject faults, then export JSON or copy a share link.
-        </div>
-        <div class="field">
-          <label>Title</label>
-          <input type="text" id="st-title" value="${this.esc(s.meta.title)}" />
-        </div>
-        <div class="grid-2">
-          <div class="field">
-            <label>Author</label>
-            <input type="text" id="st-author" value="${this.esc(s.meta.author)}" />
-          </div>
-          <div class="field">
-            <label>Difficulty (1–5)</label>
-            <input type="number" min="1" max="5" id="st-diff" value="${s.meta.difficulty}" />
-          </div>
-        </div>
-        <div class="field">
-          <label>Description</label>
-          <textarea id="st-desc" rows="2">${this.esc(s.meta.description)}</textarea>
-        </div>
-        <div class="field">
-          <label>Diagnostic notes (one per line)</label>
-          <textarea id="st-hints" rows="2">${this.esc(s.meta.hints.join('\n'))}</textarea>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Objectives (${s.objectives.length})</div>
-        ${s.objectives.map((o, i) => `
-          <div class="obj-row">
-            <span class="mono">
-              ${o.type === 'led' ? `LED ${o.ref} = ${o.on ? 'ON' : 'OFF'}` : `V(${o.a}) ∈ [${o.min}, ${o.max}] V`}
-            </span>
-            <button class="btn ghost icon sm" data-del-obj="${i}" title="Remove">${icon('x', 12)}</button>
-          </div>
-        `).join('')}
-        <div class="row">
-          <select class="grow" id="st-obj-ref">
-            ${(leds.length ? leds : probes).map((r) => `<option value="${r}">${r}</option>`).join('')}
-          </select>
-          <button class="btn sm" id="st-add-led">Add LED on</button>
-        </div>
-        <div class="row">
-          <input type="number" step="0.1" id="st-vmin" value="2.3" style="width:72px" placeholder="min V" />
-          <input type="number" step="0.1" id="st-vmax" value="2.7" style="width:72px" placeholder="max V" />
-          <button class="btn sm grow" id="st-add-v">Add V range</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Verification & fault mode</div>
-        <div class="field">
-          <label>CTF flag</label>
-          <input type="text" id="st-flag" value="${this.esc(this.studioFlagInput)}" />
-        </div>
-        <button class="btn sm primary block" id="st-lock">${icon('lock', 13)}<span>Lock reference topology & flag</span></button>
-        <button class="btn sm block ${this.authorMode ? 'warn' : ''}" id="st-author-mode">
-          ${this.authorMode ? 'Fault injection active' : 'Enable fault injection'}
-        </button>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Injected faults (${faulted.reduce((n, x) => n + x.faults.length, 0)})</div>
-        ${faulted.length ? faulted.map(({ c, faults }) => `
-          <button class="btn ghost sm block" data-goto-fault="${this.esc(c.id)}" style="display:block;text-align:left;height:auto;padding:4px 6px;white-space:normal;overflow-wrap:anywhere">
-            <b class="mono">${this.esc(c.ref)}</b>
-            ${faults.map((f) => `<div class="muted" style="font-size:11px">${this.esc(f.label)}</div>`).join('')}
-          </button>
-        `).join('') : `<div class="muted">None yet. Enable fault injection, select a part (Inspect tab) and inject a fault.</div>`}
-      </div>
-
-      <div class="card">
-        <div class="card-title">Export</div>
-        <div class="grid-2">
-          <button class="btn sm primary" id="st-export-json">${icon('download', 13)}<span>Export JSON</span></button>
-          <button class="btn sm" id="st-share-url">${icon('link', 13)}<span>Copy link</span></button>
-          <button class="btn sm" id="st-export-mod" style="grid-column:span 2" title="A .zip others can install from Boards → Mods">${icon('box', 13)}<span>Export as mod (.zip)</span></button>
-        </div>
-      </div>
-    `;
-
-    const syncMeta = () => {
-      s.meta.title = (this.sideBodyEl.querySelector('#st-title') as HTMLInputElement).value.trim() || 'Untitled';
-      s.meta.author = (this.sideBodyEl.querySelector('#st-author') as HTMLInputElement).value.trim() || 'anonymous';
-      s.meta.difficulty = Math.max(1, Math.min(5, Number((this.sideBodyEl.querySelector('#st-diff') as HTMLInputElement).value) || 2));
-      s.meta.description = (this.sideBodyEl.querySelector('#st-desc') as HTMLTextAreaElement).value;
-      s.meta.hints = (this.sideBodyEl.querySelector('#st-hints') as HTMLTextAreaElement).value.split('\n').map((x) => x.trim()).filter(Boolean);
-      this.refreshScenarioSelect();
-    };
-
-    ['#st-title', '#st-author', '#st-diff', '#st-desc', '#st-hints'].forEach((sel) => {
-      this.sideBodyEl.querySelector(sel)?.addEventListener('change', syncMeta);
-    });
-
-    this.sideBodyEl.querySelectorAll<HTMLButtonElement>('[data-del-obj]').forEach((b) => {
-      b.addEventListener('click', () => {
-        s.objectives.splice(Number(b.dataset.delObj), 1);
-        this.renderStudioTab();
-      });
-    });
-
-    this.sideBodyEl.querySelector('#st-add-led')?.addEventListener('click', () => {
-      const ref = (this.sideBodyEl.querySelector('#st-obj-ref') as HTMLSelectElement).value;
-      if (ref) {
-        s.objectives.push({ type: 'led', ref, on: true } satisfies Objective);
-        this.renderStudioTab();
-      }
-    });
-
-    this.sideBodyEl.querySelector('#st-add-v')?.addEventListener('click', () => {
-      const ref = (this.sideBodyEl.querySelector('#st-obj-ref') as HTMLSelectElement).value;
-      const min = Number((this.sideBodyEl.querySelector('#st-vmin') as HTMLInputElement).value);
-      const max = Number((this.sideBodyEl.querySelector('#st-vmax') as HTMLInputElement).value);
-      if (ref && Number.isFinite(min) && Number.isFinite(max)) {
-        s.objectives.push({ type: 'voltage', a: ref, min, max } satisfies Objective);
-        this.renderStudioTab();
-      }
-    });
-
-    this.sideBodyEl.querySelector('#st-lock')?.addEventListener('click', async () => {
-      syncMeta();
-      const flag = (this.sideBodyEl.querySelector('#st-flag') as HTMLInputElement).value.trim();
-      if (!flag) { this.toast('Enter a CTF flag first', 'danger'); return; }
-      this.studioFlagInput = flag;
-      // a built-in board locked with a new flag becomes the author's own challenge: give it its own id
-      // (the flag lock is derived from the id, and a copy with a built-in id would clash when shared)
-      if (this.bundledIds.has(s.id)) s.id = `custom-${s.meta.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}-${Date.now().toString(36)}`;
-      const conn = buildConnectivity(this.board);
-      const topo = topology(this.board, conn, s.id);
-      s.lock = await lockFlag(flag, topo);
-      this.refLockedHash = topo.slice(0, 6);
-      this.authorMode = true;
-      this.toast('Reference topology locked! Now sabotage the board and export/share.', 'success');
-      this.renderUI();
-    });
-
-    this.sideBodyEl.querySelectorAll<HTMLButtonElement>('[data-goto-fault]').forEach((b) => {
-      b.addEventListener('click', () => {
-        const c = this.board.components.find((x) => x.id === b.dataset.gotoFault);
-        if (!c) return;
-        this.selectedCompId = c.id;
-        this.activeTab = 'inspect';
-        if (this.camera.bothSides) this.camera.focusAt(c.side === 'B' ? this.board.w * 2 + BOTH_GAP - c.at[0] : c.at[0], c.at[1], 10);
-        else this.camera.focusAt(c.at[0], c.at[1], 10, c.side);
-        this.renderUI();
-      });
-    });
-
-    this.sideBodyEl.querySelector('#st-author-mode')?.addEventListener('click', () => {
-      this.authorMode = !this.authorMode;
-      this.renderUI();
-    });
-
-    this.sideBodyEl.querySelector('#st-export-json')?.addEventListener('click', () => {
-      syncMeta();
-      const out: Scenario = { ...s, board: cloneBoard(this.board) };
-      const blob = new Blob([serializeScenario(out)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${s.meta.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'puzzle'}.pcbfix.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      this.toast('Exported .pcbfix.json challenge!', 'success');
-    });
-
-    this.sideBodyEl.querySelector('#st-export-mod')?.addEventListener('click', () => { syncMeta(); void this.getModsModal().exportBoardAsMod(); });
-
-    this.sideBodyEl.querySelector('#st-share-url')?.addEventListener('click', async () => {
-      syncMeta();
-      const out: Scenario = { ...s, board: cloneBoard(this.board) };
-      const packed = await packText(serializeScenario(out));
-      const shareUrl = `${window.location.origin}${window.location.pathname}#s=${packed}`;
-      await navigator.clipboard?.writeText(shareUrl);
-      this.toast('Shareable puzzle URL copied to clipboard!', 'success');
-    });
+    this.getStudioPanel().render();
   }
 
   private createBlankBoard() {

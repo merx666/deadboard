@@ -129,4 +129,58 @@ const faultHtml = inspectPanel.faultCardHtml(testComp);
 assert(faultHtml.includes('Fault injection'), 'Fault card HTML should contain fault injection header');
 assert(faultHtml.includes('sab-class'), 'Fault card HTML should contain class selector');
 
-console.log('tools.test.ts: Scope, Thermal and Rework controllers, and InspectPanel — ok');
+// Mission panel testing
+import { MissionPanelController } from '../src/ui/panels/missionPanel';
+import { StudioPanelController } from '../src/ui/panels/studioPanel';
+
+const missionPanel = new MissionPanelController({
+  getActiveScenario: () => scenario,
+  getLastVerify: () => null,
+  getMoves: () => 3,
+  getHintsShown: () => 1,
+  getSolvedIds: () => new Set<string>(),
+  getScenarios: () => [scenario],
+  getRevealedFlag: () => null,
+  isTutorialOpen: () => false,
+  getSideBodyEl: () => mockEl,
+  getModBoards: () => new Map(),
+  getVideos: () => ({}),
+  esc: (s) => s,
+  txt: (s) => s,
+  toast: () => {},
+  runVerify: async () => {},
+  startTutorial: () => {},
+  openBoardCatalog: () => {},
+  openScenario: async () => {},
+  openSchematic: async () => {},
+  playVideo: () => {},
+  setHintsShown: () => {},
+});
+missionPanel.render();
+assert(mockEl.innerHTML.includes('card-title'), 'MissionPanel should render card-title header');
+
+// Studio panel testing
+const studioPanel = new StudioPanelController({
+  getActiveScenario: () => scenario,
+  getBoard: () => board,
+  isAuthorMode: () => true,
+  getRefLockedHash: () => null,
+  getStudioFlagInput: () => 'FLAG{test}',
+  getBundledIds: () => new Set<string>(),
+  getSideBodyEl: () => mockEl,
+  getCamera: () => new Camera(),
+  esc: (s) => s,
+  toast: () => {},
+  renderUI: () => {},
+  refreshScenarioSelect: () => {},
+  setStudioFlagInput: () => {},
+  setRefLockedHash: () => {},
+  setAuthorMode: () => {},
+  setSelectedCompId: () => {},
+  setActiveTab: () => {},
+  exportBoardAsMod: () => {},
+});
+studioPanel.render();
+assert(mockEl.innerHTML.includes('Scenario metadata'), 'StudioPanel should render scenario metadata card');
+
+console.log('tools.test.ts: Scope, Thermal and Rework controllers, and UI Panels — ok');
