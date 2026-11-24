@@ -32,11 +32,15 @@ import { setSoundEnabled, sfxBeep, sfxBlow, sfxClick, sfxCut, sfxSolder, sfxWin,
 import { icon } from './icons';
 import { mountFeedbackForm, type FeedbackContext } from './feedback';
 import { BRAND, markSvg } from './logo';
-import { getBeginnerPrimerHtml, TUTORIAL_SCENARIO_IDS, getTutorialTopics, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
+import { TUTORIAL_SCENARIO_IDS, getTutorialTopics, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
 import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsMobileLayout } from './touch';
 import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
 import { BOARD_PRESET_METAS, type BoardPresetMeta } from '../boards/presetsMeta';
-import type { ComponentPart } from '../parts/catalog';
+import { OrderModalController } from './modals/orderModal';
+import { PartsBinModalController } from './modals/partsBinModal';
+import { ShortcutsModalController } from './modals/shortcutsModal';
+import { ReportModalController } from './modals/reportModal';
+import { HelpModalController } from './modals/helpModal';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
 type PanelTab = 'mission' | 'inspect' | 'studio';
@@ -181,21 +185,19 @@ export class PcbApp {
   private revealedFlag: string | null = null;
   private compSearch = '';
   private showHelp = false;
+  private helpModal: HelpModalController | null = null;
   private showShortcuts = false;
+  private shortcutsModal: ShortcutsModalController | null = null;
   private showReport = false;
+  private reportModal: ReportModalController | null = null;
   private showFeedback = false;
   private showBoards = false;
   private showOrder = false;
-  private orderSubmitted = false;
-  private orderReceiptId: string | null = null;
+  private orderModal: OrderModalController | null = null;
   private boardFilter: 'all' | 'tutorials' | 'challenges' | 'hardware' | 'mods' = 'all';
   private showMods = false;
   private showPartsBin = false;
-  private partsBinTargetCompId: string | null = null;
-  private partsBinSearch = '';
-  private partsBinCategory = 'all';
-  private partsBinFilterCompatible = true;
-  private partsBinSelectedPartId: string | null = null;
+  private partsBinModal: PartsBinModalController | null = null;
   /** Ids of the boards that ship with LiveBoard (built-ins + demos): an author's copy needs its own id. */
   private bundledIds = new Set<string>();
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
@@ -1710,7 +1712,11 @@ export class PcbApp {
     q('#btn-creator-open')?.addEventListener('click', openCreator);
     q('#btn-creator')?.addEventListener('click', openCreator);
 
-    q('#btn-order-pcb')?.addEventListener('click', openCreator);
+    q('#btn-order-pcb')?.addEventListener('click', () => {
+      this.showOrder = true;
+      this.modalPos = [0, 0];
+      this.renderModal();
+    });
     q('#btn-report')?.addEventListener('click', () => {
       this.showReport = !this.showReport;
       if (this.showReport) { this.showBoards = false; this.showFeedback = false; this.showHelp = false; this.showShortcuts = false; }
@@ -4179,12 +4185,33 @@ export class PcbApp {
     this.toast(`Saved ${manifest.id}.zip: check the name, author and licence in mod.json before sharing.${lockNote}`, lockNote ? 'info' : 'success');
   }
 
+  private getPartsBinModal(): PartsBinModalController {
+    if (!this.partsBinModal) {
+      this.partsBinModal = new PartsBinModalController({
+        getBoard: () => this.board,
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        toast: (msg, kind) => this.toast(msg, kind),
+        esc: (s) => this.esc(s),
+        pushUndo: () => this.pushUndo(),
+        recompute: (rebuild) => this.recompute(rebuild),
+        onClose: () => {
+          this.showPartsBin = false;
+          this.renderModal();
+        },
+        onPartReplaced: () => {
+          if (this.activeTab === 'inspect') this.renderInspectTab();
+          this.renderUI();
+        },
+        isSuppressModalBgClose: () => this.suppressModalBgClose,
+        resetSuppressModalBgClose: () => { this.suppressModalBgClose = false; },
+      });
+    }
+    return this.partsBinModal;
+  }
+
   private openPartsBin(targetComp: Component | null = null) {
-    this.partsBinTargetCompId = targetComp?.id ?? null;
-    this.partsBinCategory = this.getInitialCategoryForComp(targetComp);
-    this.partsBinFilterCompatible = !!targetComp;
-    this.partsBinSearch = '';
-    this.partsBinSelectedPartId = null;
+    this.getPartsBinModal().open(targetComp);
     this.showPartsBin = true;
     this.showBoards = false;
     this.showHelp = false;
@@ -4196,537 +4223,16 @@ export class PcbApp {
     this.renderModal();
   }
 
-  private getInitialCategoryForComp(c: Component | null): string {
-    if (!c) return 'all';
-    switch (c.kind) {
-      case 'resistor':
-      case 'capacitor':
-      case 'fuse':
-      case 'switch':
-        return 'passives';
-      case 'diode':
-      case 'led':
-        return 'diodes';
-      case 'ic':
-        if (/^(u|reg|ldo|pwr|vr)/i.test(c.ref)) return 'power';
-        if (/^(esp|mod|pico|mcu)/i.test(c.ref)) return 'modules';
-        return 'all';
-      default:
-        return 'all';
-    }
-  }
-
-  private isPartCompatibleWith(part: ComponentPart, c: Component): boolean {
-    const cPkg = c.footprint?.toLowerCase().trim();
-    const pPkg = part.pkg.toLowerCase();
-    const pkgMatch = cPkg ? pPkg.includes(cPkg) || cPkg.includes(pPkg.split(' ')[0]) : false;
-
-    switch (c.kind) {
-      case 'resistor':
-        return part.valKind === 'R' || (part.category === 'passives' && !part.valKind);
-      case 'capacitor':
-        return part.valKind === 'C';
-      case 'fuse':
-        return part.valKind === 'F';
-      case 'diode':
-      case 'led':
-        return part.valKind === 'D' || part.category === 'diodes';
-      case 'ic':
-        return (
-          part.valKind === 'IC' ||
-          part.category === 'power' ||
-          part.category === 'modules' ||
-          part.category === 'interface' ||
-          part.category === 'transistors' ||
-          pkgMatch
-        );
-      default:
-        return true;
-    }
-  }
-
-  private replaceComponentWithPart(c: Component, part: ComponentPart) {
-    this.pushUndo();
-
-    if (part.valKind === 'R') {
-      c.kind = 'resistor';
-      if (part.defaultVal !== undefined) c.value = part.defaultVal;
-    } else if (part.valKind === 'C') {
-      c.kind = 'capacitor';
-      if (part.defaultVal !== undefined) c.value = part.defaultVal;
-    } else if (part.valKind === 'D') {
-      c.kind = 'diode';
-    } else if (part.valKind === 'F') {
-      c.kind = 'fuse';
-      if (part.defaultVal !== undefined) c.value = part.defaultVal;
-    } else if (part.valKind === 'SW') {
-      c.kind = 'switch';
-    } else if (
-      part.valKind === 'IC' ||
-      part.category === 'modules' ||
-      part.category === 'power' ||
-      part.category === 'interface' ||
-      part.category === 'transistors'
-    ) {
-      c.kind = 'ic';
-      if (part.defaultVal !== undefined) c.value = part.defaultVal;
-    }
-
-    c.label = `${part.mpn} (${part.lcsc})`;
-    if (part.pkg) c.footprint = part.pkg;
-
-    installPart(c, {
-      ...(part.defaultVal !== undefined ? { value: part.defaultVal } : {}),
-      reversed: c.state.reversed,
-    });
-
-    if (part.pins && Object.keys(part.pins).length > 0) {
-      c.pins = { ...c.pins, ...part.pins };
-    }
-
-    sfxSolder();
-    this.recompute(false);
-
-    const isPl = getLang() === 'pl';
-    this.toast(
-      isPl
-        ? `Zamontowano ${part.mpn} (${part.lcsc}) w ${c.ref}`
-        : `Fitted ${part.mpn} (${part.lcsc}) at ${c.ref}`,
-      'success'
-    );
-
-    this.showPartsBin = false;
-    this.renderModal();
-
-    if (this.activeTab === 'inspect') {
-      this.renderInspectTab();
-    }
-    this.renderUI();
-  }
-
-  private async renderPartsBinModal(): Promise<void> {
-    const { searchSupplierParts, findPartById } = await import('../parts/catalog');
-    const isPl = getLang() === 'pl';
-    const targetComp = this.partsBinTargetCompId
-      ? this.board.components.find((x) => x.id === this.partsBinTargetCompId) ?? null
-      : null;
-
-    const categories: { id: string; labelPl: string; labelEn: string }[] = [
-      { id: 'all', labelPl: 'Wszystkie kategorie', labelEn: 'All Categories' },
-      { id: 'passives', labelPl: 'Elementy pasywne (R, C, Bezpieczniki)', labelEn: 'Passives (R, C, Fuses)' },
-      { id: 'power', labelPl: 'Zasilanie i regulatory (LDO, Buck, PMIC)', labelEn: 'Power & Regulators (LDO, Buck, PMIC)' },
-      { id: 'modules', labelPl: 'Mikrokontrolery i moduły (ESP32, Pico, MCU)', labelEn: 'MCU & Modules (ESP32, Pico, MCU)' },
-      { id: 'transistors', labelPl: 'Tranzystory MOSFET', labelEn: 'MOSFET Transistors' },
-      { id: 'diodes', labelPl: 'Diody, LED i ochrona ESD', labelEn: 'Diodes, LEDs & ESD Protection' },
-      { id: 'interface', labelPl: 'Interfejsy (USB, UART, Flash)', labelEn: 'Interfaces (USB, UART, Flash)' },
-    ];
-
-    const getParts = () => {
-      let list = searchSupplierParts(this.partsBinSearch, this.partsBinCategory);
-      if (targetComp && this.partsBinFilterCompatible) {
-        list = list.filter((p) => this.isPartCompatibleWith(p, targetComp));
-      }
-      return list;
-    };
-
-    const initialParts = getParts();
-    if (!this.partsBinSelectedPartId && initialParts.length > 0) {
-      this.partsBinSelectedPartId = initialParts[0].id;
-    }
-
-    const renderPinoutTable = (pins: Record<string, string>) => {
-      const entries = Object.entries(pins);
-      if (entries.length === 0) {
-        return `<div style="font-size:12px; color:var(--muted); text-align:center; padding:16px;">${isPl ? 'Brak zdefiniowanych wyprowadzeń dla tego elementu' : 'No pin definitions available for this part'}</div>`;
-      }
-      return `
-        <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
-          <thead>
-            <tr style="border-bottom: 1px solid var(--border); color: var(--muted); text-align: left;">
-              <th style="padding: 4px 6px; width: 60px;">Pin</th>
-              <th style="padding: 4px 6px;">${isPl ? 'Sygnał / Rola' : 'Signal / Function'}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${entries.map(([pin, name]) => {
-              const isGnd = /gnd/i.test(name);
-              const isPwr = /(vcc|3v3|5v|vdd|vin|vsys|vbus|pwr|\+)/i.test(name);
-              const col = isGnd ? 'var(--text-2)' : isPwr ? 'var(--warn)' : 'var(--accent)';
-              return `
-                <tr style="border-bottom: 1px solid var(--surface-2);">
-                  <td style="padding: 3px 6px; font-family: var(--mono); color: var(--muted); font-weight: 600;">${this.esc(pin)}</td>
-                  <td style="padding: 3px 6px; font-family: var(--mono); color: ${col}; font-weight: 500;">${this.esc(name)}</td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-      `;
-    };
-
-    const renderDetailPane = (part: ComponentPart | null) => {
-      if (!part) {
-        return `
-          <div class="card" style="padding: 24px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--muted);">
-            <div style="margin-bottom: 10px; opacity: 0.6;">${icon('box', 36)}</div>
-            <div style="font-weight: 600; font-size: 13px; color: var(--text-2); margin-bottom: 6px;">
-              ${isPl ? 'Podgląd podzespołu i pinout' : 'Component Specs & Pinout'}
-            </div>
-            <div style="font-size: 12px; max-width: 260px; line-height: 1.5;">
-              ${targetComp
-                ? (isPl ? `Wybierz część z listy, aby sprawdzić jej wyprowadzenia przed wlutowaniem w ${this.esc(targetComp.ref)}.` : `Select a part from the list to preview its pinout before fitting onto ${this.esc(targetComp.ref)}.`)
-                : (isPl ? 'Wybierz podzespół z listy po lewej, aby zbadać jego parametry techniczne, obudowę i wyprowadzenia sygnałów.' : 'Select a component from the list on the left to inspect its parameters, package, and pinout.')
-              }
-            </div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="card" style="padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; height: 100%; display: flex; flex-direction: column;">
-          <div style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-              <div>
-                <div style="font-size: 16px; font-weight: 600; font-family: var(--mono); color: var(--accent);">${this.esc(part.mpn)}</div>
-                <div style="font-size: 12px; color: var(--muted);">${this.esc(part.manufacturer)}</div>
-              </div>
-              <span class="badge info">${this.esc(part.pkg)}</span>
-            </div>
-            <div style="font-size: 12px; color: var(--text-2); margin-top: 6px; line-height: 1.4;">
-              ${this.esc(isPl ? part.descPl : part.descEn)}
-            </div>
-          </div>
-
-          <dl class="kv" style="margin: 0 0 10px 0; font-size: 12px;">
-            <dt>LCSC Code</dt><dd class="mono" style="color: var(--accent); font-weight: 600;">${this.esc(part.lcsc)}</dd>
-            <dt>PCBWay Part</dt><dd class="mono">${this.esc(part.pcbwayPart)}</dd>
-            <dt>${isPl ? 'Napięcie robocze' : 'Voltage'}</dt><dd>${this.esc(part.voltage)}</dd>
-            <dt>${isPl ? 'Prąd znamionowy' : 'Current'}</dt><dd>${this.esc(part.current)}</dd>
-            <dt>${isPl ? 'Obudowa / Wymiary' : 'Package / Size'}</dt><dd>${part.footprintWidth} × ${part.footprintHeight} mm (${part.padsCount} ${isPl ? 'padów' : 'pads'})</dd>
-            ${part.defaultVal !== undefined ? `
-              <dt>${isPl ? 'Wartość domyślna' : 'Default Value'}</dt>
-              <dd class="mono">${part.valKind === 'R' ? fmtOhm(part.defaultVal) : part.valKind === 'C' ? fmtSI(part.defaultVal, 'F') : part.valKind === 'F' ? fmtSI(part.defaultVal, 'A') : String(part.defaultVal)}</dd>
-            ` : ''}
-          </dl>
-
-          <!-- Pinout section -->
-          <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-            <div style="font-weight: 600; font-size: 12px; margin-bottom: 6px; color: var(--text-2); display: flex; align-items: center; justify-content: space-between;">
-              <span>${isPl ? 'Wyprowadzenia i sygnały (Pinout)' : 'Pinout & Signal Functions'}</span>
-              <span style="font-size: 11px; color: var(--muted);">${Object.keys(part.pins).length} ${isPl ? 'pinów' : 'pins'}</span>
-            </div>
-            <div style="flex: 1; overflow-y: auto; max-height: 220px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); padding: 4px;">
-              ${renderPinoutTable(part.pins)}
-            </div>
-          </div>
-
-          ${targetComp ? `
-            <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px;">
-              <button class="btn primary sm grow" id="pb-detail-fit" style="width: 100%; justify-content: center; height: 32px; font-weight: 600;">
-                ${icon('iron', 14)}
-                <span>${isPl ? `Zamontuj ${this.esc(part.mpn)} w ${this.esc(targetComp.ref)}` : `Fit ${this.esc(part.mpn)} into ${this.esc(targetComp.ref)}`}</span>
-              </button>
-            </div>
-          ` : `
-            <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px;">
-              <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">
-                ${isPl ? 'Wlutuj w wybrany element na płytce:' : 'Fit onto board component:'}
-              </label>
-              <div class="row">
-                <select id="pb-select-board-comp" class="grow" style="padding: 4px 8px; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text);">
-                  <option value="">${isPl ? '— Wybierz element z płytki —' : '— Select a component —'}</option>
-                  ${this.board.components.map((bc) => `<option value="${this.esc(bc.id)}">${this.esc(bc.ref)} (${this.esc(bc.kind)}) — ${this.esc(marking(bc))}</option>`).join('')}
-                </select>
-                <button class="btn primary sm" id="pb-btn-fit-selected" disabled>
-                  ${icon('iron', 12)}
-                  <span>${isPl ? 'Wlutuj' : 'Fit'}</span>
-                </button>
-              </div>
-            </div>
-          `}
-        </div>
-      `;
-    };
-
-    const renderListHtml = (parts: ComponentPart[]) => {
-      if (parts.length === 0) {
-        return `
-          <div style="padding: 36px 16px; text-align: center; color: var(--muted);">
-            <div style="font-size: 14px; font-weight: 600; color: var(--text-2); margin-bottom: 4px;">
-              ${isPl ? 'Brak pasujących komponentów w katalogu' : 'No matching components in catalog'}
-            </div>
-            <div style="font-size: 12px;">
-              ${isPl ? 'Spróbuj zmienić kategorię lub wyczyścić filtr kompatybilności.' : 'Try changing category or clearing the compatibility filter.'}
-            </div>
-          </div>
-        `;
-      }
-      return parts.map((p) => {
-        const isSelected = p.id === this.partsBinSelectedPartId;
-        return `
-          <div class="card pb-part-card ${isSelected ? 'selected' : ''}" data-part-id="${this.esc(p.id)}" style="padding: 10px 12px; margin-bottom: 8px; cursor: pointer; border: 1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}; background: ${isSelected ? 'var(--surface-3)' : 'var(--surface)'}; border-radius: 6px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-              <div>
-                <div style="font-weight: 600; color: var(--text); font-family: var(--mono); font-size: 13px;">
-                  ${this.esc(p.mpn)}
-                  <span style="font-weight: normal; font-size: 11px; color: var(--muted); margin-left: 6px;">${this.esc(p.manufacturer)}</span>
-                </div>
-                <div style="font-size: 12px; color: var(--text-2); margin-top: 2px;">
-                  ${this.esc(isPl ? p.namePl : p.nameEn)}
-                </div>
-              </div>
-              <div style="display: flex; gap: 4px; flex-shrink: 0;">
-                <span class="badge info" style="font-size: 10px;">${this.esc(p.pkg)}</span>
-                <span class="badge" style="font-size: 10px; background: rgba(75, 227, 138, 0.12); color: var(--accent); border: 1px solid rgba(75, 227, 138, 0.3);">${this.esc(p.lcsc)}</span>
-              </div>
-            </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 11.5px; color: var(--muted);">
-              <div><b>${isPl ? 'Napięcie:' : 'Voltage:'}</b> ${this.esc(p.voltage)}</div>
-              <div><b>${isPl ? 'Prąd:' : 'Current:'}</b> ${this.esc(p.current)}</div>
-              <div><b>PCBWay:</b> ${this.esc(p.pcbwayPart)}</div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px;">
-              <button class="btn sm ghost pb-btn-preview" data-part-id="${this.esc(p.id)}" style="font-size: 11.5px; padding: 2px 8px;">
-                ${icon('box', 12)}
-                <span>${isPl ? 'Wyprowadzenia (Pinout)' : 'Specs & Pinout'}</span>
-              </button>
-              ${targetComp ? `
-                <button class="btn sm primary pb-btn-fit" data-part-id="${this.esc(p.id)}" style="font-size: 11.5px; padding: 2px 10px;">
-                  ${icon('iron', 12)}
-                  <span>${isPl ? `Wlutuj w ${this.esc(targetComp.ref)}` : `Fit into ${this.esc(targetComp.ref)}`}</span>
-                </button>
-              ` : `
-                <button class="btn sm pb-btn-inspect" data-part-id="${this.esc(p.id)}" style="font-size: 11.5px; padding: 2px 8px;">
-                  <span>${isPl ? 'Pokaż szczegóły' : 'Inspect part'}</span>
-                </button>
-              `}
-            </div>
-          </div>
-        `;
-      }).join('');
-    };
-
-    this.modalRootEl.innerHTML = `
-      <div class="modal-backdrop" id="partsbin-close-bg">
-        <div class="modal parts-bin-modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0);">
-          <div class="modal-head" title="${isPl ? 'Przeciągnij, aby przesunąć okno' : 'Drag to move window'}">
-            <div>
-              <h2>${targetComp
-                ? (isPl ? `Magazyn Części (LCSC / PCBWay) — Wymiana dla ${this.esc(targetComp.ref)}` : `Parts Bin (LCSC / PCBWay) — Replace for ${this.esc(targetComp.ref)}`)
-                : (isPl ? 'Magazyn Części (Baza LCSC / PCBWay)' : 'Parts Bin (LCSC & PCBWay Component Library)')
-              }</h2>
-              <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
-                ${targetComp
-                  ? (isPl
-                      ? `Wybierz część z katalogu, aby wlutować ją na płytce w miejsce <b>${this.esc(targetComp.ref)}</b> (aktualnie: ${this.esc(marking(targetComp))}).`
-                      : `Select a catalog part to solder onto the board at <b>${this.esc(targetComp.ref)}</b> (current: ${this.esc(marking(targetComp))}).`)
-                  : (isPl
-                      ? 'Przeglądaj podzespoły z baz LCSC i PCBWay, badaj ich parametry, obudowy i mapy wyprowadzeń (pinout).'
-                      : 'Browse LCSC and PCBWay parts, inspect their technical specs, footprints, and signal pinouts.')
-                }
-              </div>
-            </div>
-            <button class="btn ghost icon sm" id="partsbin-close" title="${isPl ? 'Zamknij (Esc)' : 'Close (Esc)'}">
-              ${icon('x', 14)}
-            </button>
-          </div>
-
-          <div class="cat-toolbar" style="gap: 10px; border-bottom: 1px solid var(--border); padding: 10px 16px; background: var(--surface-2); display: flex; flex-wrap: wrap; align-items: center;">
-            <div style="position: relative; flex: 1; min-width: 200px;">
-              <input
-                type="text"
-                id="partsbin-search"
-                class="grow"
-                placeholder="${isPl ? 'Szukaj po MPN, LCSC (np. C49678), producencie, obudowie (0805, SOT-223)...' : 'Search by MPN, LCSC (e.g. C49678), manufacturer, package (0805, SOT-223)...'}"
-                value="${this.esc(this.partsBinSearch)}"
-                style="width: 100%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text);"
-              />
-            </div>
-            <select
-              id="partsbin-category"
-              style="padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); min-width: 180px;"
-            >
-              ${categories.map((cat) => `
-                <option value="${cat.id}" ${this.partsBinCategory === cat.id ? 'selected' : ''}>
-                  ${isPl ? cat.labelPl : cat.labelEn}
-                </option>
-              `).join('')}
-            </select>
-            ${targetComp ? `
-              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; user-select: none;">
-                <input type="checkbox" id="pb-chk-compat" ${this.partsBinFilterCompatible ? 'checked' : ''} style="accent-color: var(--accent);" />
-                <span>${isPl ? `Tylko pasujące do ${this.esc(targetComp.ref)}` : `Compatible with ${this.esc(targetComp.ref)} only`}</span>
-              </label>
-            ` : ''}
-          </div>
-
-          <div class="pb-layout">
-            <div style="display: flex; flex-direction: column; overflow: hidden;">
-              <div id="partsbin-count" style="font-size: 12px; color: var(--muted); margin-bottom: 8px; flex-shrink: 0;">
-                ${isPl ? `Znaleziono ${initialParts.length} komponentów w bazie:` : `Found ${initialParts.length} components in library:`}
-              </div>
-              <div id="partsbin-list" style="overflow-y: auto; flex: 1; padding-right: 4px;">
-                ${renderListHtml(initialParts)}
-              </div>
-            </div>
-
-            <div id="partsbin-detail" style="overflow-y: auto;">
-              ${renderDetailPane(this.partsBinSelectedPartId ? findPartById(this.partsBinSelectedPartId) ?? null : null)}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const closeModal = () => {
-      this.showPartsBin = false;
-      this.renderModal();
-    };
-
-    this.modalRootEl.querySelector('#partsbin-close')?.addEventListener('click', closeModal);
-    this.modalRootEl.querySelector('#partsbin-close-bg')?.addEventListener('click', (e) => {
-      if (this.suppressModalBgClose) {
-        this.suppressModalBgClose = false;
-        return;
-      }
-      if ((e.target as HTMLElement).id === 'partsbin-close-bg') closeModal();
-    });
-
-    const searchInput = this.modalRootEl.querySelector<HTMLInputElement>('#partsbin-search');
-    const categorySelect = this.modalRootEl.querySelector<HTMLSelectElement>('#partsbin-category');
-    const compatCheckbox = this.modalRootEl.querySelector<HTMLInputElement>('#pb-chk-compat');
-    const partsListEl = this.modalRootEl.querySelector<HTMLElement>('#partsbin-list');
-    const countEl = this.modalRootEl.querySelector<HTMLElement>('#partsbin-count');
-    const detailEl = this.modalRootEl.querySelector<HTMLElement>('#partsbin-detail');
-
-    const updateDetail = () => {
-      const part = this.partsBinSelectedPartId
-        ? findPartById(this.partsBinSelectedPartId) ?? null
-        : null;
-      if (detailEl) {
-        detailEl.innerHTML = renderDetailPane(part);
-        bindDetailActions(part);
-      }
-    };
-
-    const bindDetailActions = (part: ComponentPart | null) => {
-      if (!part) return;
-      if (targetComp) {
-        this.modalRootEl.querySelector('#pb-detail-fit')?.addEventListener('click', () => {
-          this.replaceComponentWithPart(targetComp, part);
-        });
-      } else {
-        const boardCompSelect = this.modalRootEl.querySelector<HTMLSelectElement>('#pb-select-board-comp');
-        const fitBtn = this.modalRootEl.querySelector<HTMLButtonElement>('#pb-btn-fit-selected');
-        boardCompSelect?.addEventListener('change', () => {
-          if (fitBtn) fitBtn.disabled = !boardCompSelect.value;
-        });
-        fitBtn?.addEventListener('click', () => {
-          const compId = boardCompSelect?.value;
-          if (!compId) return;
-          const target = this.board.components.find((bc) => bc.id === compId);
-          if (target) {
-            this.replaceComponentWithPart(target, part);
-          }
-        });
-      }
-    };
-
-    const bindListActions = () => {
-      this.modalRootEl.querySelectorAll<HTMLElement>('.pb-part-card').forEach((card) => {
-        const partId = card.dataset.partId;
-        if (!partId) return;
-
-        card.addEventListener('click', (e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('.pb-btn-fit') || target.closest('.pb-btn-preview')) return;
-
-          this.partsBinSelectedPartId = partId;
-          this.modalRootEl.querySelectorAll('.pb-part-card').forEach((c) => {
-            const sel = (c as HTMLElement).dataset.partId === partId;
-            c.classList.toggle('selected', sel);
-            (c as HTMLElement).style.borderColor = sel ? 'var(--accent)' : 'var(--border)';
-            (c as HTMLElement).style.background = sel ? 'var(--surface-3)' : 'var(--surface)';
-          });
-          updateDetail();
-        });
-      });
-
-      this.modalRootEl.querySelectorAll<HTMLButtonElement>('.pb-btn-preview, .pb-btn-inspect').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const partId = btn.dataset.partId;
-          if (!partId) return;
-          this.partsBinSelectedPartId = partId;
-          this.modalRootEl.querySelectorAll('.pb-part-card').forEach((c) => {
-            const sel = (c as HTMLElement).dataset.partId === partId;
-            c.classList.toggle('selected', sel);
-            (c as HTMLElement).style.borderColor = sel ? 'var(--accent)' : 'var(--border)';
-            (c as HTMLElement).style.background = sel ? 'var(--surface-3)' : 'var(--surface)';
-          });
-          updateDetail();
-        });
-      });
-
-      this.modalRootEl.querySelectorAll<HTMLButtonElement>('.pb-btn-fit').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const partId = btn.dataset.partId;
-          if (!partId || !targetComp) return;
-          const part = findPartById(partId);
-          if (part) this.replaceComponentWithPart(targetComp, part);
-        });
-      });
-    };
-
-    const updateList = () => {
-      const parts = getParts();
-      if (countEl) {
-        countEl.textContent = isPl
-          ? `Znaleziono ${parts.length} komponentów w bazie:`
-          : `Found ${parts.length} components in library:`;
-      }
-      if (partsListEl) {
-        partsListEl.innerHTML = renderListHtml(parts);
-        bindListActions();
-      }
-      if (this.partsBinSelectedPartId && !parts.some((p) => p.id === this.partsBinSelectedPartId)) {
-        this.partsBinSelectedPartId = parts[0]?.id ?? null;
-      } else if (!this.partsBinSelectedPartId && parts.length > 0) {
-        this.partsBinSelectedPartId = parts[0].id;
-      }
-      updateDetail();
-    };
-
-    searchInput?.addEventListener('input', () => {
-      this.partsBinSearch = searchInput.value;
-      updateList();
-    });
-
-    categorySelect?.addEventListener('change', () => {
-      this.partsBinCategory = categorySelect.value;
-      updateList();
-    });
-
-    compatCheckbox?.addEventListener('change', () => {
-      this.partsBinFilterCompatible = compatCheckbox.checked;
-      updateList();
-    });
-
-    bindListActions();
-    bindDetailActions(this.partsBinSelectedPartId ? findPartById(this.partsBinSelectedPartId) ?? null : null);
-  }
-
   private renderModal() {
     this.mount.querySelector('#btn-boards')?.classList.toggle('active', this.showBoards);
     this.mount.querySelector('#btn-feedback')?.classList.toggle('active', this.showFeedback);
     this.mount.querySelector('#btn-order-pcb')?.classList.toggle('active', this.showOrder);
     if (this.showOrder) {
-      void this.renderOrderModal();
+      void this.getOrderModal().render();
       return;
     }
     if (this.showPartsBin) {
-      void this.renderPartsBinModal();
+      void this.getPartsBinModal().render();
       return;
     }
     if (this.showBoards) {
@@ -4742,363 +4248,79 @@ export class PcbApp {
       return;
     }
     if (this.showShortcuts) {
-      this.renderShortcutsModal();
+      this.getShortcutsModal().render();
       return;
     }
     if (this.showReport) {
-      this.renderReportModal();
+      this.getReportModal().render();
       return;
     }
     if (!this.showHelp) {
       this.modalRootEl.innerHTML = '';
       return;
     }
-    const isPl = getLang() === 'pl';
-    this.modalRootEl.innerHTML = this.txt(`
-      <div class="modal-backdrop" id="help-close-bg">
-        <div class="modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0)">
-          <div class="modal-head" title="${isPl ? 'Przeciągnij, aby przesunąć okno' : 'Drag to move window'}">
-            <h2>${isPl ? 'Dokumentacja i Pomoc' : 'Documentation'}</h2>
-            <button class="btn ghost icon sm" id="help-close" title="${isPl ? 'Zamknij' : 'Close'}">${icon('x', 14)}</button>
-          </div>
-          <div class="card">
-            <div class="card-title">${isPl ? 'Przegląd symulatora' : 'Overview'}</div>
-            <p class="text-2" style="margin:0">
-              ${isPl
-                ? 'Każdy scenariusz to symulowana płytka drukowana rozwiązywana przez szybką analizę węzłową DC lub pełny silnik SPICE (wybór w górnym pasku; możliwość eksportu każdej płytki jako netlisty ngspice <code>.cir</code>), renderowana w 2D/3D z akceleracją WebGPU. Diagnozuj usterki elektryczne, lutuj i naprawiaj obwód, a następnie kliknij <b>Uruchom testy</b>, aby zweryfikować naprawę i odszyfrować flagę CTF.'
-                : 'Each scenario provides a simulated circuit board solved via fast DC nodal analysis or a full SPICE engine (selectable in the top bar; export any board as an ngspice <code>.cir</code> netlist), rendered in 2D/3D WebGPU. Diagnose electrical faults, perform rework, and execute <b>Run tests</b> to verify repairs and decrypt the CTF flag.'}
-            </p>
-          </div>
-          ${getBeginnerPrimerHtml()}
-          <div class="card">
-            <div class="card-title">${isPl ? 'Zasady diagnozy usterek' : 'Fault diagnosis'}</div>
-            <ul>
-              ${isPl ? `
-                <li><b>Przerwana lub przecięta ścieżka</b> — Wyłącz zasilanie, sprawdź ciągłość w trybie <b>Ω</b>, a następnie połącz przerwę <b>Lutownicą (3)</b> lub <b>Kynarem / Zworką (6)</b>.</li>
-                <li><b>Mostek lutowniczy lub opiłek miedzi</b> — Obróć płytkę na stronę dolną (<b>F</b>) i zbadaj dokładnie. Usuń nadmiar cyny <b>Plecionką (4)</b> lub przetnij zwarcie <b>Skalpelem (7)</b>.</li>
-                <li><b>Zimny lut</b> — Matowe, ziarniste punkty lutownicze od spodu świadczą o braku zwilżenia; przetop je (reflow) <b>Lutownicą (3)</b>.</li>
-                <li><b>Odwrotna polaryzacja</b> — Sprawdź ścięcie katody i wewnętrzne kowadełko diody LED lub pasek diody względem oznaczenia <b>K</b>; popraw orientację narzędziem <b>Obrót o 180° (5)</b> lub zbadaj w trybie <b>Diody</b>.</li>
-                <li><b>Uszkodzony lub niewłaściwy element</b> — Zbadaj paski kodowe rezystora lub stratę mocy w trybie <b>Termowizyjnym</b>, a następnie podmień wartość w <b>Magazynie części (8)</b>.</li>
-              ` : `
-                <li><b>Open or cut trace</b> — Disable power, verify continuity in <b>Ω</b> mode, then bridge with <b>Soldering iron (3)</b> or <b>Jumper wire (6)</b>.</li>
-                <li><b>Solder bridge or copper sliver</b> — Flip to the bottom side (<b>F</b>) and inspect closely. Clear blobs with <b>Desolder wick (4)</b> or cut slivers with <b>Trace cutter (7)</b>.</li>
-                <li><b>Cold solder joint</b> — Matte grainy pads on the back side indicate poor wetting; reflow using <b>Soldering iron (3)</b>.</li>
-                <li><b>Reversed polarity</b> — Check the LED cathode notch and internal anvil or diode band against the silkscreen <b>K</b> marker; correct with <b>Rotate 180° (5)</b> or test in <b>Diode</b> mode.</li>
-                <li><b>Damaged or wrong part</b> — Inspect resistor color bands or power dissipation in <b>Thermal</b> mode, then swap values in <b>Parts bin (8)</b>.</li>
-              `}
-            </ul>
-          </div>
-          <div class="card">
-            <div class="card-title">${isPl ? 'Zauważyłeś błąd? Masz pomysł?' : 'Found a bug? Have an idea?'}</div>
-            <p class="text-2" style="margin:0">${isPl ? 'Zgłoś to bezpośrednio z warsztatu: nie wymaga konta. Możesz dołączyć szczegóły techniczne (przeglądarka, GPU, płytka), aby ułatwić reprodukcję.' : 'Tell us from inside the bench: no account needed. Technical details (browser, GPU, board) can be attached so the problem can be reproduced.'}</p>
-            <div class="row"><button class="btn sm" id="help-feedback">${icon('message', 13)}<span>${isPl ? 'Wyślij opinię' : 'Send feedback'}</span></button></div>
-          </div>
-          <div class="card">
-            <div class="card-title">${isPl ? 'Import i tworzenie wyzwań' : 'Importing &amp; authoring'}</div>
-            <p class="text-2" style="margin:0">
-              ${isPl
-                ? `Przeciągnij i upuść plik KiCad <code>.kicad_pcb</code>, boardview <code>.brd</code> lub <code>.pcbfix.json</code> do okna aplikacji. W zakładce <b>Twórca</b> zablokuj działający układ swoją flagą, wprowadź usterki i wyeksportuj JSON, link lub modyfikację.`
-                : `Drag and drop a KiCad <code>.kicad_pcb</code>, boardview <code>.brd</code> or <code>.pcbfix.json</code> file into the workspace. In the <b>Author</b> tab, lock a working reference topology with your flag, inject faults, and export JSON, a shareable link, or a mod.`}
-            </p>
-          </div>
-        </div>
-      </div>
-    `);
-    this.modalRootEl.querySelector('#help-feedback')?.addEventListener('click', () => this.openFeedback(true));
-    this.modalRootEl.querySelector('#help-close')?.addEventListener('click', () => {
-      this.showHelp = false;
-      this.renderModal();
-    });
-    this.modalRootEl.querySelector('#help-close-bg')?.addEventListener('click', (e) => {
-      if (this.suppressModalBgClose) {
-        this.suppressModalBgClose = false;
-        return;
-      }
-      if ((e.target as HTMLElement).id === 'help-close-bg') {
-        this.showHelp = false;
-        this.renderModal();
-      }
-    });
+    this.getHelpModal().render();
   }
 
-  private renderShortcutsModal() {
-    const isPl = getLang() === 'pl';
-    this.modalRootEl.innerHTML = `
-      <div class="modal-backdrop" id="sc-close-bg">
-        <div class="modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); max-width: 680px;">
-          <div class="modal-head" title="Drag to move window">
-            <h2>${isPl ? 'Skróty Klawiszowe Warsztatu LiveBoard' : 'LiveBoard Bench Keyboard Shortcuts'}</h2>
-            <button class="btn ghost icon sm" id="sc-close" title="Close">${icon('x', 14)}</button>
-          </div>
-          <div class="card" style="padding:16px;">
-            <div class="shortcuts-grid">
-              <div class="sc-card">
-                <h4>${isPl ? 'Narzędzia Pomiary &amp; Rework' : 'Tools &amp; Rework'}</h4>
-                <div class="sc-row"><span>${isPl ? 'Wybierz / Kursor' : 'Select'}</span><span class="sc-kbd">1</span></div>
-                <div class="sc-row"><span>${isPl ? 'Multimetr cyfrowy' : 'Multimeter'}</span><span class="sc-kbd">2</span></div>
-                <div class="sc-row"><span>${isPl ? 'Lutownica kolbowa' : 'Soldering iron'}</span><span class="sc-kbd">3</span></div>
-                <div class="sc-row"><span>${isPl ? 'Plecionka rozlutownicza' : 'Desolder wick'}</span><span class="sc-kbd">4</span></div>
-                <div class="sc-row"><span>${isPl ? 'Obróć o 180°' : 'Rotate 180°'}</span><span class="sc-kbd">5</span></div>
-                <div class="sc-row"><span>${isPl ? 'Kynar / Zworka' : 'Jumper wire'}</span><span class="sc-kbd">6</span></div>
-                <div class="sc-row"><span>${isPl ? 'Rylec do ścieżek' : 'Trace cutter'}</span><span class="sc-kbd">7</span></div>
-                <div class="sc-row"><span>${isPl ? 'Magazyn części' : 'Parts bin'}</span><span class="sc-kbd">8</span></div>
-                <div class="sc-row"><span>${isPl ? 'Zamrażacz w sprayu' : 'Freeze spray'}</span><span class="sc-kbd">9</span></div>
-                <div class="sc-row"><span>${isPl ? 'Izopropanol (IPA)' : 'Isopropyl (IPA)'}</span><span class="sc-kbd">0</span></div>
-                <div class="sc-row"><span>${isPl ? 'Gorące powietrze (Hot-Air)' : 'Hot air'}</span><span class="sc-kbd">H</span></div>
-                <div class="sc-row"><span>${isPl ? 'Metoda kalafoniowa' : 'Rosin'}</span><span class="sc-kbd">R</span></div>
-                <div class="sc-row"><span>${isPl ? 'Oscyloskop' : 'Oscilloscope'}</span><span class="sc-kbd">O</span></div>
-                <div class="sc-row"><span>${isPl ? 'Docisk laminatu' : 'Flex / Press'}</span><span class="sc-kbd">B</span></div>
-              </div>
-
-              <div class="sc-card">
-                <h4>${isPl ? 'Kamera &amp; Widok' : 'Camera &amp; View'}</h4>
-                <div class="sc-row"><span>${isPl ? 'Przełącz 2D / 3D' : 'Switch 2D / 3D'}</span><span class="sc-kbd">Tab</span></div>
-                <div class="sc-row"><span>${isPl ? 'Odwróć stronę (Top / Bottom)' : 'Flip board'}</span><span class="sc-kbd">F</span></div>
-                <div class="sc-row"><span>${isPl ? 'Dopasuj do ekranu' : 'Fit board'}</span><span class="sc-kbd">C</span></div>
-                <div class="sc-row"><span>${isPl ? 'Obrót w 3D' : 'Orbit (3D)'}</span><span class="sc-kbd">PPM / RMB</span></div>
-                <div class="sc-row"><span>${isPl ? 'Przesuwanie widoku' : 'Pan screen'}</span><span class="sc-kbd">ŚPM / Spacja+LPM</span></div>
-              </div>
-
-              <div class="sc-card">
-                <h4>${isPl ? 'Operacje Warsztatu' : 'Bench Actions'}</h4>
-                <div class="sc-row"><span>${isPl ? 'Zasilanie płyty (Wł/Wył)' : 'Power On / Off'}</span><span class="sc-kbd">P</span></div>
-                <div class="sc-row"><span>${isPl ? 'Cofnij ruch' : 'Undo'}</span><span class="sc-kbd">⌘Z / Ctrl+Z</span></div>
-                <div class="sc-row"><span>${isPl ? 'Ponów ruch' : 'Redo'}</span><span class="sc-kbd">⇧⌘Z / Ctrl+Y</span></div>
-                <div class="sc-row"><span>${isPl ? 'Przełącz język (PL/EN)' : 'Toggle Language'}</span><span class="sc-kbd">L</span></div>
-                <div class="sc-row"><span>${isPl ? 'Kreator płytek i baza części' : 'Board creator &amp; parts'}</span><span class="sc-kbd">K</span></div>
-                <div class="sc-row"><span>${isPl ? 'Okienko skrótów' : 'Shortcuts modal'}</span><span class="sc-kbd">?</span></div>
-                <div class="sc-row"><span>${isPl ? 'Zamknij okno' : 'Close window'}</span><span class="sc-kbd">Esc</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-    this.modalRootEl.querySelector('#sc-close')?.addEventListener('click', () => {
-      this.showShortcuts = false;
-      this.renderModal();
-    });
-    this.modalRootEl.querySelector('#sc-close-bg')?.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).id === 'sc-close-bg') {
-        this.showShortcuts = false;
-        this.renderModal();
-      }
-    });
-  }
-
-  private renderReportModal() {
-    const isPl = getLang() === 'pl';
-    const s = this.activeScenario;
-    const tr = translateScenario(s.id, s.meta.title, s.meta.description);
-    const dateStr = new Date().toLocaleString(isPl ? 'pl-PL' : 'en-US');
-    const isSolved = this.solvedIds.has(s.id);
-    const moves = this.moves;
-    const psuState = this.powerOn ? (this.psuInject ? `Wstrzykiwanie (${this.psuInject.volts}V, ${this.psuInject.amps}A)` : 'Włączone (Zasilanie główne)') : 'Wyłączone';
-    const flagStr = this.revealedFlag ? this.revealedFlag : (isSolved ? 'Zaliczono' : 'Zablokowana');
-
-    const reportMd = `# Protokół Diagnozy i Weryfikacji Projektu LiveBoard (PulsePCB Studio)
-**Płytka badana**: ${tr.title} (${s.id})
-**Data badania**: ${dateStr}
-**Status końcowy**: ${isSolved ? '✅ ZALICZONO (Zgodność z projektem)' : '⏳ W TRAKCIE DIAGNOZY'}
-**Liczba wykonanych operacji (Moves)**: ${moves} ${s.meta.par ? `/ Par: ${s.meta.par}` : ''}
-**Flaga weryfikacyjna**: ${flagStr}
-
----
-
-## 1. Stan Początkowy i Założenia Projektowe
-${tr.description}
-
-## 2. Pomiary i Telemetria Warsztatowa
-- Stan Zasilacza: ${psuState}
-- Nastawa OCP: ${this.ocpAmps === 0 ? 'Brak limitu' : `${this.ocpAmps * 1000} mA`}
-- Tryb symulatora: ${this.solver.toUpperCase()}
-- Sonda czerwona: ${this.probeRed ? `Węzeł ${this.probeRed.net} (${this.probeRed.label})` : 'Niepodłączona'}
-- Sonda czarna: ${this.probeBlack ? `Węzeł ${this.probeBlack.net} (${this.probeBlack.label})` : 'Masa (GND)'}
-
-## 3. Cele Testowe i Weryfikacja
-${s.objectives.map((o: Objective, idx: number) => {
-  if (o.type === 'led') return `- Cel ${idx + 1}: Dioda ${o.ref} powinna ${o.on ? 'świecić' : 'być zgaszona'}`;
-  if (o.type === 'voltage') return `- Cel ${idx + 1}: Napięcie na ${o.a}: oczekiwane ${o.min}V - ${o.max}V`;
-  return `- Cel ${idx + 1}: ${(o as { type: string }).type}`;
-}).join('\n')}
-
----
-*Wygenerowano przez LiveBoard Studio · Laboratorium Elektroniki*
-`;
-
-    this.modalRootEl.innerHTML = `
-      <div class="modal-backdrop" id="rep-close-bg">
-        <div class="modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); max-width: 640px;">
-          <div class="modal-head" title="Drag to move window">
-            <h2>${isPl ? 'Protokół Diagnozy i Naprawy Laboratoryjnej' : 'Bench Diagnostic & Repair Report'}</h2>
-            <button class="btn ghost icon sm" id="rep-close" title="Close">${icon('x', 14)}</button>
-          </div>
-          <div class="card" style="padding:16px;">
-            <div class="report-content">${this.esc(reportMd)}</div>
-            <div class="row wrap" style="margin-top:14px; justify-content:flex-end; gap:8px;">
-              <button class="btn primary sm" id="rep-dl-md">${icon('download', 13)}<span>${isPl ? 'Pobierz raport (.md)' : 'Download Report (.md)'}</span></button>
-              <button class="btn sm" id="rep-dl-json">${icon('download', 13)}<span>${isPl ? 'Pobierz stan (.json)' : 'Download State (.json)'}</span></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    this.modalRootEl.querySelector('#rep-close')?.addEventListener('click', () => {
-      this.showReport = false;
-      this.renderModal();
-    });
-    this.modalRootEl.querySelector('#rep-close-bg')?.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).id === 'rep-close-bg') {
-        this.showReport = false;
-        this.renderModal();
-      }
-    });
-
-    this.modalRootEl.querySelector('#rep-dl-md')?.addEventListener('click', () => {
-      const blob = new Blob([reportMd], { type: 'text/markdown;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `raport-pcb-${s.id}.md`;
-      a.click();
-    });
-
-    this.modalRootEl.querySelector('#rep-dl-json')?.addEventListener('click', () => {
-      const data = {
-        scenarioId: s.id,
-        title: tr.title,
-        solved: isSolved,
-        moves: this.moves,
-        flag: this.revealedFlag,
-        timestamp: new Date().toISOString(),
-        board: this.board,
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `liveboard-${s.id}-telemetria.json`;
-      a.click();
-    });
-  }
-
-  private hashString(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0;
+  private getHelpModal(): HelpModalController {
+    if (!this.helpModal) {
+      this.helpModal = new HelpModalController({
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        txt: (html) => this.txt(html),
+        onOpenFeedback: () => this.openFeedback(true),
+        onClose: () => {
+          this.showHelp = false;
+          this.renderModal();
+        },
+        isSuppressModalBgClose: () => this.suppressModalBgClose,
+        resetSuppressModalBgClose: () => { this.suppressModalBgClose = false; },
+      });
     }
-    return hash;
+    return this.helpModal;
   }
 
-  private async getBoardBom() {
-    const { findPartById, searchSupplierParts } = await import('../parts/catalog');
-    const isPl = getLang() === 'pl';
-    const compMap = new Map<string, {
-      refs: string[];
-      name: string;
-      kind: string;
-      pkg: string;
-      mfr: string;
-      mpn: string;
-      lcsc: string;
-      pcbway: string;
-      priceUsd: number;
-    }>();
-
-    const fmtOhms = (v: number): string => {
-      if (v >= 1e6) return (v / 1e6).toFixed(v % 1e6 === 0 ? 0 : 1) + ' MΩ';
-      if (v >= 1e3) return (v / 1e3).toFixed(v % 1e3 === 0 ? 0 : 1) + ' kΩ';
-      return v.toFixed(v % 1 === 0 ? 0 : 1) + ' Ω';
-    };
-
-    const fmtFarads = (v: number): string => {
-      if (v >= 1e-3) return (v * 1e3).toFixed(1) + ' mF';
-      if (v >= 1e-6) return (v * 1e6).toFixed(1) + ' µF';
-      if (v >= 1e-9) return (v * 1e9).toFixed(1) + ' nF';
-      if (v >= 1e-12) return (v * 1e12).toFixed(1) + ' pF';
-      return v + ' F';
-    };
-
-    for (const c of this.board.components) {
-      const part = (c.id ? findPartById(c.id) : undefined)
-        ?? searchSupplierParts(c.label || c.ref || c.kind)[0];
-
-      let valStr = '';
-      if (c.kind === 'resistor') valStr = fmtOhms(c.value);
-      else if (c.kind === 'capacitor') valStr = fmtFarads(c.value);
-      else if (c.kind === 'led') valStr = (c.color ? c.color.toUpperCase() + ' ' : '') + 'LED';
-      else if (c.kind === 'battery') valStr = `${c.value}V`;
-      else valStr = c.label || c.kind;
-
-      const pkg = c.footprint || (c.body.shape === 'chip' ? 'SOIC/QFN' : 'SMD 0805');
-      const mfr = part?.manufacturer ?? (
-        c.kind === 'resistor' ? 'Yageo' :
-        c.kind === 'capacitor' ? 'Samsung Electro-Mechanics' :
-        c.kind === 'led' ? 'Everlight' :
-        c.kind === 'ic' || c.body.shape === 'chip' ? 'Microchip / Espressif' : 'Generic SMT'
-      );
-      const mpn = part?.mpn ?? (
-        c.kind === 'resistor' ? `RC0805JR-${valStr.replace(/[^0-9]/g, '') || '10'}K` :
-        c.kind === 'capacitor' ? `CL21B104KBCNNNC` :
-        c.kind === 'led' ? `19-217-BHC-AP1Q2-3T` :
-        c.label || `${c.kind.toUpperCase()}-SMD`
-      );
-      const lcsc = part?.lcsc ?? ('C' + (Math.abs(this.hashString(c.ref + c.kind + valStr)) % 800000 + 100000));
-      const pcbway = part?.pcbwayPart ?? ('PW-' + c.kind.toUpperCase() + '-' + pkg.replace(/[^a-zA-Z0-9]/g, ''));
-      const priceUsd = (
-        part?.category === 'modules' ? 2.85 :
-        part?.category === 'power' ? 0.35 :
-        part?.category === 'transistors' ? 0.08 :
-        part?.category === 'diodes' ? 0.04 :
-        part?.category === 'interface' ? 0.95 :
-        c.kind === 'resistor' ? 0.003 :
-        c.kind === 'capacitor' ? 0.006 :
-        c.kind === 'led' ? 0.02 :
-        c.kind === 'switch' ? 0.08 :
-        c.kind === 'ic' ? 0.45 : 0.15
-      );
-      const name = isPl ? (part?.namePl ?? (c.label || c.kind)) : (part?.nameEn ?? (c.label || c.kind));
-
-      const groupKey = [mfr, mpn, pkg, valStr].join('::');
-      const existing = compMap.get(groupKey);
-      if (existing) {
-        existing.refs.push(c.ref);
-      } else {
-        compMap.set(groupKey, {
-          refs: [c.ref],
-          name: `${name} (${valStr})`,
-          kind: c.kind,
-          pkg,
-          mfr,
-          mpn,
-          lcsc,
-          pcbway,
-          priceUsd,
-        });
-      }
+  private getShortcutsModal(): ShortcutsModalController {
+    if (!this.shortcutsModal) {
+      this.shortcutsModal = new ShortcutsModalController({
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        onClose: () => {
+          this.showShortcuts = false;
+          this.renderModal();
+        },
+      });
     }
-
-    const items = [...compMap.values()].map((entry) => ({
-      ...entry,
-      quantity: entry.refs.length,
-      totalPriceUsd: entry.refs.length * entry.priceUsd,
-    }));
-
-    const totalComponentsUsd = items.reduce((sum, item) => sum + item.totalPriceUsd, 0);
-    const fabCostUsd = 2.00;
-    const assemblyCostUsd = 15.00;
-    const totalUsd = fabCostUsd + totalComponentsUsd + assemblyCostUsd;
-    const totalPln = totalUsd * 4.25;
-
-    return {
-      items,
-      totalComponentsUsd,
-      fabCostUsd,
-      assemblyCostUsd,
-      totalUsd,
-      totalPln,
-    };
+    return this.shortcutsModal;
   }
+
+  private getReportModal(): ReportModalController {
+    if (!this.reportModal) {
+      this.reportModal = new ReportModalController({
+        getScenario: () => this.activeScenario,
+        getBoard: () => this.board,
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        isSolved: () => this.solvedIds.has(this.activeScenario.id),
+        getMoves: () => this.moves,
+        isPowerOn: () => this.powerOn,
+        getPsuInject: () => this.psuInject ? { volts: this.psuInject.volts, amps: this.psuInject.amps } : null,
+        getRevealedFlag: () => this.revealedFlag,
+        getOcpAmps: () => this.ocpAmps,
+        getSolver: () => this.solver,
+        getProbeRed: () => this.probeRed ? { net: this.probeRed.net, label: this.probeRed.label } : null,
+        getProbeBlack: () => this.probeBlack ? { net: this.probeBlack.net, label: this.probeBlack.label } : null,
+        esc: (s) => this.esc(s),
+        onClose: () => {
+          this.showReport = false;
+          this.renderModal();
+        },
+      });
+    }
+    return this.reportModal;
+  }
+
+
 
   /** LiveBoard Studio (board creator + supplier catalog) is a heavyweight module: only load it when opened. */
   private async openBoardCreator(): Promise<void> {
@@ -5114,471 +4336,25 @@ ${s.objectives.map((o: Objective, idx: number) => {
     }).show();
   }
 
-  private async exportBomCsv(): Promise<void> {
-    const bom = await this.getBoardBom();
-    const rows: string[] = [
-      'Item,Designators,Quantity,Component,Package,Manufacturer,MPN,LCSC Part #,PCBWay Part #,Unit Price (USD),Total (USD)',
-    ];
-    bom.items.forEach((item, idx) => {
-      rows.push([
-        idx + 1,
-        `"${item.refs.join(', ')}"`,
-        item.quantity,
-        `"${item.name.replace(/"/g, '""')}"`,
-        `"${item.pkg.replace(/"/g, '""')}"`,
-        `"${item.mfr.replace(/"/g, '""')}"`,
-        `"${item.mpn.replace(/"/g, '""')}"`,
-        item.lcsc,
-        item.pcbway,
-        item.priceUsd.toFixed(4),
-        item.totalPriceUsd.toFixed(4),
-      ].join(','));
-    });
-    const csvContent = '\uFEFF' + rows.join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `LiveBoard-${this.activeScenario.id}-BOM.csv`;
-    a.click();
-    this.toast('Pobrano arkusz zestawienia komponentów BOM (.csv)', 'success');
-  }
-
-  private exportCplCsv() {
-    const rows: string[] = [
-      'Designator,Val,Package,Mid X(mm),Mid Y(mm),Rotation,Layer',
-    ];
-    const fmtOhms = (v: number): string => {
-      if (v >= 1e6) return (v / 1e6).toFixed(v % 1e6 === 0 ? 0 : 1) + ' MΩ';
-      if (v >= 1e3) return (v / 1e3).toFixed(v % 1e3 === 0 ? 0 : 1) + ' kΩ';
-      return v.toFixed(v % 1 === 0 ? 0 : 1) + ' Ω';
-    };
-    const fmtFarads = (v: number): string => {
-      if (v >= 1e-3) return (v * 1e3).toFixed(1) + ' mF';
-      if (v >= 1e-6) return (v * 1e6).toFixed(1) + ' µF';
-      if (v >= 1e-9) return (v * 1e9).toFixed(1) + ' nF';
-      if (v >= 1e-12) return (v * 1e12).toFixed(1) + ' pF';
-      return v + ' F';
-    };
-    for (const c of this.board.components) {
-      const val = c.kind === 'resistor' ? fmtOhms(c.value) : c.kind === 'capacitor' ? fmtFarads(c.value) : (c.label || c.kind);
-      rows.push([
-        c.ref,
-        `"${val.replace(/"/g, '""')}"`,
-        `"${(c.footprint || (c.body.shape === 'chip' ? 'SOIC/QFN' : '0805')).replace(/"/g, '""')}"`,
-        c.at[0].toFixed(2),
-        c.at[1].toFixed(2),
-        c.rot.toFixed(0),
-        c.side === 'B' ? 'Bottom' : 'Top',
-      ].join(','));
-    }
-    const csvContent = '\uFEFF' + rows.join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `LiveBoard-${this.activeScenario.id}-Centroid-CPL.csv`;
-    a.click();
-    this.toast('Pobrano plik współrzędnych montażowych SMT Pick & Place (.csv)', 'success');
-  }
-
-  /** Exports the current board as a full industrial Gerber RS-274X + Excellon fabrication package (src/io/gerber). */
-  private async exportGerberZip() {
-    try {
-      const { exportGerberZip: exportGerbers, createSimpleZip } = await import('../io/gerber');
-      const res = exportGerbers(this.board, `LiveBoard-${this.activeScenario.id}`);
-      // keep the fabrication spec alongside the CAM files - it carries the project metadata
-      const w = this.board.w;
-      const h = this.board.h;
-      const notes = [
-        '========================================================================',
-        'LiveBoard (PulsePCB Studio) — PCB Fabrication Specification',
-        '========================================================================',
-        `Project: ${this.activeScenario.meta.title} (${this.activeScenario.id})`,
-        `Board Size: ${w.toFixed(2)} mm x ${h.toFixed(2)} mm`,
-        'Layers: 2-layer FR-4 Standard (Top Cu, Bottom Cu)',
-        `Finished Thickness: ${this.board.thickness.toFixed(2)} mm`,
-        'Surface Finish: Lead-Free HASL / ENIG',
-        'Solder Mask: Green (default) / Matte Black',
-        'Silkscreen: White',
-        'Copper Weight: 1 oz (35 um)',
-        'Minimum Track / Spacing: 0.15 mm (6 mil)',
-        `Components Placed: ${this.board.components.length}`,
-        'Generated by LiveBoard Studio for PCBWay & JLCPCB automated ordering.',
-        '========================================================================',
-      ].join('\r\n');
-      const zipData = createSimpleZip([...res.files, { filename: 'FABRICATION-SPEC.txt', content: notes }]);
-      const blob = new Blob([zipData as BlobPart], { type: 'application/zip' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `LiveBoard-${this.activeScenario.id}-Gerbers-RS274X.zip`;
-      a.click();
-      this.toast('Wygenerowano i pobrano pełną paczkę Gerber RS-274X (.zip)!', 'success');
-    } catch (e) {
-      this.toast(`Błąd generowania Gerber ZIP: ${e instanceof Error ? e.message : String(e)}`, 'danger');
-    }
-  }
-
-  private async renderOrderModal(): Promise<void> {
-    const isPl = getLang() === 'pl';
-    const bom = await this.getBoardBom();
-
-    if (this.orderSubmitted) {
-      this.modalRootEl.innerHTML = `
-        <div class="modal-backdrop" id="order-close-bg">
-          <div class="modal order-modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); max-width: 640px; width: 95vw;">
-            <div class="modal-head" title="${isPl ? 'Przeciągnij okno' : 'Drag to move window'}">
-              <div class="row" style="gap:8px; align-items:center;">
-                <span style="color:var(--ok); display:flex;">${icon('check', 18)}</span>
-                <h2 style="margin:0">${isPl ? 'Płatność Potwierdzona · Zlecenie Przekazane' : 'Order Confirmed & Placed'}</h2>
-              </div>
-              <button class="btn ghost icon sm" id="order-close" title="${isPl ? 'Zamknij' : 'Close'}">${icon('x', 14)}</button>
-            </div>
-            <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
-              <div class="card" style="border-color: rgba(0, 230, 118, 0.4); background: rgba(0, 230, 118, 0.05); text-align: center; padding: 24px 16px;">
-                <div style="font-size: 38px; margin-bottom: 8px;">🚀</div>
-                <h3 style="margin: 0 0 6px 0; color: var(--ok); font-size: 20px;">
-                  ${isPl ? 'Twoja płytka trafiła do fabryki!' : 'Your PCB is in Production!'}
-                </h3>
-                <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-2);">
-                  ${isPl 
-                    ? `Zlecenie <b>#${this.orderReceiptId}</b> zostało pomyślnie opłacone i zakolejkowane do naświetlania fotomaski oraz automatycznego montażu SMT w fabryce partnerskiej PCBWay / JLCPCB.` 
-                    : `Order <b>#${this.orderReceiptId}</b> has been successfully paid and scheduled for photo-imaging and automated SMT assembly at our PCBWay / JLCPCB partner facility.`}
-                </p>
-                <div class="badge pass" style="font-size: 13px; padding: 6px 14px; display: inline-flex;">
-                  ${isPl ? 'Status: W TRAKCIE REALIZACJI (24h PCB + 48h SMT)' : 'Status: IN PRODUCTION (24h PCB + 48h SMT)'}
-                </div>
-              </div>
-
-              <div class="card" style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-                <div class="row" style="justify-content: space-between;">
-                  <span class="muted">${isPl ? 'Numer zlecenia' : 'Order ID'}:</span>
-                  <span class="mono" style="font-weight: 600;">#${this.orderReceiptId}</span>
-                </div>
-                <div class="row" style="justify-content: space-between;">
-                  <span class="muted">${isPl ? 'Projekt PCB' : 'PCB Project'}:</span>
-                  <span>${this.esc(this.activeScenario.meta.title)}</span>
-                </div>
-                <div class="row" style="justify-content: space-between;">
-                  <span class="muted">${isPl ? 'Liczba sztuk' : 'Quantity'}:</span>
-                  <span>5 sztuk (Pakiet prototypowy)</span>
-                </div>
-                <div class="row" style="justify-content: space-between;">
-                  <span class="muted">${isPl ? 'Opłacona kwota' : 'Amount Paid'}:</span>
-                  <span style="font-weight: 700; color: var(--accent);">$${bom.totalUsd.toFixed(2)} USD (~${bom.totalPln.toFixed(2)} PLN)</span>
-                </div>
-                <div class="row" style="justify-content: space-between;">
-                  <span class="muted">${isPl ? 'Numer śledzenia przesyłki' : 'Tracking Number'}:</span>
-                  <span class="mono">DHL-EXP-${this.orderReceiptId}</span>
-                </div>
-              </div>
-
-              <div class="row" style="gap: 10px; justify-content: flex-end;">
-                <button class="btn sm ghost" id="btn-order-download-receipt">
-                  ${icon('download', 14)}
-                  <span>${isPl ? 'Pobierz Potwierdzenie (.json)' : 'Download Receipt (.json)'}</span>
-                </button>
-                <button class="btn sm" id="btn-order-reset">
-                  ${icon('plus', 14)}
-                  <span>${isPl ? 'Nowe Zamówienie' : 'New Order'}</span>
-                </button>
-                <button class="btn sm primary" id="btn-order-done">
-                  <span>${isPl ? 'Gotowe / Zamknij' : 'Done / Close'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      const closeModal = () => {
-        this.showOrder = false;
-        this.renderModal();
-      };
-      this.modalRootEl.querySelector('#order-close')?.addEventListener('click', closeModal);
-      this.modalRootEl.querySelector('#btn-order-done')?.addEventListener('click', closeModal);
-      this.modalRootEl.querySelector('#order-close-bg')?.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).id === 'order-close-bg') closeModal();
+  private getOrderModal(): OrderModalController {
+    if (!this.orderModal) {
+      this.orderModal = new OrderModalController({
+        getBoard: () => this.board,
+        getScenario: () => this.activeScenario,
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        toast: (msg, kind) => this.toast(msg, kind),
+        exportSpice: () => this.exportSpice(),
+        esc: (s) => this.esc(s),
+        onClose: () => {
+          this.showOrder = false;
+          this.renderModal();
+        },
       });
-      this.modalRootEl.querySelector('#btn-order-reset')?.addEventListener('click', () => {
-        this.orderSubmitted = false;
-        void this.renderOrderModal();
-      });
-      this.modalRootEl.querySelector('#btn-order-download-receipt')?.addEventListener('click', () => {
-        const receipt = {
-          orderId: this.orderReceiptId,
-          timestamp: new Date().toISOString(),
-          project: this.activeScenario.meta.title,
-          dimensions: `${this.board.w}x${this.board.h}mm`,
-          componentsCount: this.board.components.length,
-          totalUsd: bom.totalUsd,
-          totalPln: bom.totalPln,
-          tracking: `DHL-EXP-${this.orderReceiptId}`,
-          status: 'IN_FABRICATION',
-        };
-        const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `LiveBoard-Order-${this.orderReceiptId}.json`;
-        a.click();
-      });
-      return;
     }
-
-    // Normal ordering / quotation view
-    this.modalRootEl.innerHTML = `
-      <div class="modal-backdrop" id="order-close-bg">
-        <div class="modal order-modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0); width: min(1060px, 96vw); max-height: 90vh; display: flex; flex-direction: column;">
-          <div class="modal-head" title="${isPl ? 'Przeciągnij okno' : 'Drag to move window'}">
-            <div class="row" style="gap:10px; align-items:center;">
-              <span style="color:var(--accent); display:flex;">${icon('cart', 20)}</span>
-              <div>
-                <h2 style="margin:0; font-size: 16px; font-weight: 700;">
-                  ${isPl ? 'Zamówienie Fabrykacji PCB & Montaż SMT' : 'Order PCB Fabrication & SMT Assembly'}
-                </h2>
-                <div style="font-size: 11px; color: var(--text-2);">
-                  LiveBoard (PulsePCB Studio) · ${isPl ? 'Współpraca z fabrykami PCBWay / JLCPCB / Magazynem LCSC' : 'Integrated with PCBWay / JLCPCB / LCSC Component Depot'}
-                </div>
-              </div>
-            </div>
-            <button class="btn ghost icon sm" id="order-close" title="${isPl ? 'Zamknij (Esc)' : 'Close (Esc)'}">${icon('x', 14)}</button>
-          </div>
-
-          <div style="padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1;">
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-              
-              <!-- LEFT COLUMN: BOM & SPEC & EXPORTS -->
-              <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0;">
-                
-                <!-- Board spec card -->
-                <div class="card" style="margin: 0; padding: 12px 14px; background: var(--surface);">
-                  <div class="card-title" style="margin-bottom: 8px; font-size: 13px; font-weight: 600;">
-                    ${isPl ? '📐 Specyfikacja Płytki Drukowanej' : '📐 Board Physical Specification'}
-                  </div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px;">
-                    <div><span class="muted">${isPl ? 'Wymiary' : 'Dimensions'}:</span> <b>${this.board.w.toFixed(1)} × ${this.board.h.toFixed(1)} mm</b></div>
-                    <div><span class="muted">${isPl ? 'Grubość' : 'Thickness'}:</span> <b>${this.board.thickness.toFixed(1)} mm FR4</b></div>
-                    <div><span class="muted">${isPl ? 'Liczba warstw' : 'Layer count'}:</span> <b>2-warstwy (Top/Bottom)</b></div>
-                    <div><span class="muted">${isPl ? 'Miedź' : 'Copper weight'}:</span> <b>1 oz (35 µm)</b></div>
-                    <div><span class="muted">${isPl ? 'Komponenty' : 'Components'}:</span> <b>${this.board.components.length} szt. (${bom.items.length} typów)</b></div>
-                    <div><span class="muted">${isPl ? 'Ścieżki' : 'Traces'}:</span> <b>${this.board.traces.length} miedzianych</b></div>
-                  </div>
-                </div>
-
-                <!-- Real-time BOM analysis -->
-                <div class="card" style="margin: 0; padding: 12px 14px; flex: 1; display: flex; flex-direction: column; min-height: 220px;">
-                  <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div class="card-title" style="margin: 0; font-size: 13px; font-weight: 600;">
-                      ${isPl ? '📋 Zestawienie Komponentów (Analiza BOM w czasie rzeczywistym)' : '📋 Real-Time BOM Component Analysis'}
-                    </div>
-                    <span class="badge info">${bom.items.length} ${isPl ? 'pozycji' : 'lines'}</span>
-                  </div>
-
-                  <div style="overflow-x: auto; max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-                      <thead style="background: var(--surface-2); position: sticky; top: 0; z-index: 1;">
-                        <tr style="border-bottom: 1px solid var(--border);">
-                          <th style="padding: 6px 8px;">Ref</th>
-                          <th style="padding: 6px 8px;">${isPl ? 'Podzespół / Wartość' : 'Part / Value'}</th>
-                          <th style="padding: 6px 8px;">${isPl ? 'Obudowa' : 'Package'}</th>
-                          <th style="padding: 6px 8px;">${isPl ? 'Producent' : 'Mfr'}</th>
-                          <th style="padding: 6px 8px;">LCSC #</th>
-                          <th style="padding: 6px 8px; text-align: center;">${isPl ? 'Ilość' : 'Qty'}</th>
-                          <th style="padding: 6px 8px; text-align: right;">${isPl ? 'Cena jedn.' : 'Unit'}</th>
-                          <th style="padding: 6px 8px; text-align: right;">${isPl ? 'Wartość' : 'Total'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${bom.items.length === 0 ? `<tr><td colspan="8" style="padding: 16px; text-align: center; color: var(--muted);">${isPl ? 'Brak komponentów na płytce' : 'No components on board'}</td></tr>` : bom.items.map((it) => `
-                          <tr style="border-bottom: 1px solid var(--border-weak, rgba(255,255,255,0.06));">
-                            <td style="padding: 4px 8px; font-weight: 600; color: var(--accent); white-space: nowrap;">${this.esc(it.refs.slice(0, 3).join(', '))}${it.refs.length > 3 ? ` +${it.refs.length - 3}` : ''}</td>
-                            <td style="padding: 4px 8px; font-weight: 500;">${this.esc(it.name)}</td>
-                            <td style="padding: 4px 8px; color: var(--text-2);">${this.esc(it.pkg)}</td>
-                            <td style="padding: 4px 8px; color: var(--text-2);">${this.esc(it.mfr)}</td>
-                            <td style="padding: 4px 8px; font-family: monospace; color: var(--accent);">${this.esc(it.lcsc)}</td>
-                            <td style="padding: 4px 8px; text-align: center; font-weight: 600;">${it.quantity}</td>
-                            <td style="padding: 4px 8px; text-align: right; color: var(--text-2);">$${it.priceUsd.toFixed(3)}</td>
-                            <td style="padding: 4px 8px; text-align: right; font-weight: 600;">$${it.totalPriceUsd.toFixed(3)}</td>
-                          </tr>
-                        `).join('')}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <!-- Production export files row -->
-                  <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-                    <div style="font-size: 11px; font-weight: 600; margin-bottom: 6px; color: var(--text-2);">
-                      ${isPl ? '📦 Eksport plików do fabryki:' : '📦 Export Fabrication Files:'}
-                    </div>
-                    <div class="row wrap" style="gap: 6px;">
-                      <button class="btn sm ghost" id="btn-order-export-gerber" title="${isPl ? 'Pobierz pełną paczkę Gerber RS-274X (.zip)' : 'Download full RS-274X Gerber zip'}">
-                        ${icon('download', 12)}
-                        <span>Gerber RS-274X (.zip)</span>
-                      </button>
-                      <button class="btn sm ghost" id="btn-order-export-bom" title="${isPl ? 'Pobierz arkusz BOM (.csv)' : 'Download BOM (.csv)'}">
-                        ${icon('download', 12)}
-                        <span>BOM (.csv)</span>
-                      </button>
-                      <button class="btn sm ghost" id="btn-order-export-cpl" title="${isPl ? 'Pobierz współrzędne montażowe Pick & Place (.csv)' : 'Download Pick & Place (.csv)'}">
-                        ${icon('download', 12)}
-                        <span>Centroid CPL (.csv)</span>
-                      </button>
-                      <button class="btn sm ghost" id="btn-order-export-spice" title="${isPl ? 'Pobierz netlistę SPICE (.cir)' : 'Download SPICE netlist (.cir)'}">
-                        ${icon('download', 12)}
-                        <span>SPICE (.cir)</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              <!-- RIGHT COLUMN: QUOTATION & CHECKOUT FORM -->
-              <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0;">
-                
-                <!-- Quotation breakdown card -->
-                <div class="card" style="margin: 0; padding: 14px 16px; background: var(--surface);">
-                  <div class="card-title" style="margin-bottom: 10px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between;">
-                    <span>${isPl ? '💰 Kosztorys Fabrykacji & Montażu' : '💰 Fabrication & Assembly Quotation'}</span>
-                    <span style="color: var(--accent); font-weight: 700;">LiveBoard Direct</span>
-                  </div>
-
-                  <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
-                    <div class="row" style="justify-content: space-between;">
-                      <span>${isPl ? 'Laminat PCB (5 szt., 2-warstwy, 1.6mm FR4)' : 'PCB Fabrication (5 pcs, 2-layer FR4)'}:</span>
-                      <span style="font-weight: 600;">$${bom.fabCostUsd.toFixed(2)} USD (~8.50 PLN)</span>
-                    </div>
-                    <div class="row" style="justify-content: space-between;">
-                      <span>${isPl ? 'Komponenty magazyn LCSC / PCBWay' : 'Components (LCSC / PCBWay Depot)'}:</span>
-                      <span style="font-weight: 600;">$${bom.totalComponentsUsd.toFixed(2)} USD (~${(bom.totalComponentsUsd * 4.25).toFixed(2)} PLN)</span>
-                    </div>
-                    <div class="row" style="justify-content: space-between;">
-                      <span>${isPl ? 'Montaż automatyczny SMT + szablon pasty' : 'SMT Automated Assembly & Stencil'}:</span>
-                      <span style="font-weight: 600;">$${bom.assemblyCostUsd.toFixed(2)} USD (~63.75 PLN)</span>
-                    </div>
-                    
-                    <div style="margin: 6px 0; border-top: 1px dashed var(--border);"></div>
-
-                    <div class="row" style="justify-content: space-between; font-size: 14px; font-weight: 700;">
-                      <span>${isPl ? 'Łączny koszt szacunkowy' : 'Estimated Total'}:</span>
-                      <span style="color: var(--ok); font-size: 16px;">
-                        $${bom.totalUsd.toFixed(2)} USD <span style="font-size: 12px; color: var(--text-2);">(~${bom.totalPln.toFixed(2)} PLN)</span>
-                      </span>
-                    </div>
-                    <div style="font-size: 10px; color: var(--muted); text-align: right;">
-                      ${isPl ? '*Zawiera kontrolę optyczną AOI i test elektryczny E-test.' : '*Includes AOI optical inspection and flying probe E-test.'}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Shipping and payment checkout form -->
-                <div class="card" style="margin: 0; padding: 14px 16px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
-                  <div class="card-title" style="margin: 0; font-size: 13px; font-weight: 600;">
-                    ${isPl ? '🚚 Dane Dostawy i Płatność' : '🚚 Shipping Details & Checkout'}
-                  </div>
-
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div class="field" style="margin: 0;">
-                      <label style="font-size: 11px;">${isPl ? 'Imię i Nazwisko' : 'Full Name'}</label>
-                      <input type="text" id="order-name" value="Jan Kowalski" style="height: 28px; font-size: 12px;" />
-                    </div>
-                    <div class="field" style="margin: 0;">
-                      <label style="font-size: 11px;">Email</label>
-                      <input type="email" id="order-email" value="jan.kowalski@liveboard.io" style="height: 28px; font-size: 12px;" />
-                    </div>
-                  </div>
-
-                  <div class="field" style="margin: 0;">
-                    <label style="font-size: 11px;">${isPl ? 'Adres dostawy (Ulica i nr)' : 'Shipping Address'}</label>
-                    <input type="text" id="order-address" value="ul. Prosta 51 / 14" style="height: 28px; font-size: 12px;" />
-                  </div>
-
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div class="field" style="margin: 0;">
-                      <label style="font-size: 11px;">${isPl ? 'Kod pocztowy i Miasto' : 'Postal Code & City'}</label>
-                      <input type="text" id="order-city" value="00-838 Warszawa" style="height: 28px; font-size: 12px;" />
-                    </div>
-                    <div class="field" style="margin: 0;">
-                      <label style="font-size: 11px;">${isPl ? 'Kraj' : 'Country'}</label>
-                      <select id="order-country" style="height: 28px; font-size: 12px;">
-                        <option value="PL">Polska (PL)</option>
-                        <option value="DE">Germany (DE)</option>
-                        <option value="US">United States (US)</option>
-                        <option value="UK">United Kingdom (UK)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <!-- Payment selector -->
-                  <div style="margin-top: 4px;">
-                    <label style="font-size: 11px; display: block; margin-bottom: 4px; color: var(--text-2);">
-                      ${isPl ? 'Wybierz metodę płatności:' : 'Payment Method:'}
-                    </label>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
-                      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface-2); padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);">
-                        <input type="radio" name="order-pay" value="stripe" checked />
-                        <span>💳 Karta</span>
-                      </label>
-                      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface-2); padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);">
-                        <input type="radio" name="order-pay" value="blik" />
-                        <span>⚡ BLIK</span>
-                      </label>
-                      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface-2); padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);">
-                        <input type="radio" name="order-pay" value="paypal" />
-                        <span>🅿️ PayPal</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <!-- Submit button -->
-                  <button class="btn primary lg" id="btn-submit-order" style="margin-top: 8px; height: 38px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #ff6b00 0%, #ff8800 100%); border: none; color: white;">
-                    ${icon('check', 16)}
-                    <span>${isPl ? `Opłać i Przekaż do Produkcji ($${bom.totalUsd.toFixed(2)} USD)` : `Pay & Submit to Fabrication ($${bom.totalUsd.toFixed(2)} USD)`}</span>
-                  </button>
-                  <div style="font-size: 10px; color: var(--muted); text-align: center;">
-                    🔒 ${isPl ? 'Bezpieczne szyfrowanie SSL 256-bit · Gwarancja fabryczna LiveBoard' : '256-bit SSL encrypted checkout · LiveBoard Fab Warranty'}
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-      </div>
-    `;
-
-    const closeModal = () => {
-      this.showOrder = false;
-      this.renderModal();
-    };
-    this.modalRootEl.querySelector('#order-close')?.addEventListener('click', closeModal);
-    this.modalRootEl.querySelector('#order-close-bg')?.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).id === 'order-close-bg') closeModal();
-    });
-
-    // File exports
-    this.modalRootEl.querySelector('#btn-order-export-gerber')?.addEventListener('click', () => void this.exportGerberZip());
-    this.modalRootEl.querySelector('#btn-order-export-bom')?.addEventListener('click', () => void this.exportBomCsv());
-    this.modalRootEl.querySelector('#btn-order-export-cpl')?.addEventListener('click', () => this.exportCplCsv());
-    this.modalRootEl.querySelector('#btn-order-export-spice')?.addEventListener('click', () => this.exportSpice());
-
-    // Submit order
-    this.modalRootEl.querySelector('#btn-submit-order')?.addEventListener('click', () => {
-      const name = (this.modalRootEl.querySelector<HTMLInputElement>('#order-name')?.value ?? '').trim();
-      const addr = (this.modalRootEl.querySelector<HTMLInputElement>('#order-address')?.value ?? '').trim();
-      if (!name || !addr) {
-        this.toast(isPl ? 'Wypełnij dane adresowe do wysyłki' : 'Please provide shipping name and address', 'warn');
-        return;
-      }
-      this.orderReceiptId = 'LB-2026-' + Math.floor(100000 + Math.random() * 900000);
-      this.orderSubmitted = true;
-      sfxWin();
-      this.toast(isPl ? `Zamówienie #${this.orderReceiptId} opłacone i przekazane do montażu SMT!` : `Order #${this.orderReceiptId} confirmed and sent to SMT assembly!`, 'success');
-      this.renderOrderModal();
-    });
+    return this.orderModal;
   }
+
 
   private esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
