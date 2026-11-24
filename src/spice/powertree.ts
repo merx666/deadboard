@@ -4,6 +4,8 @@
 import type { Board, Component } from '../types';
 import type { Conn } from '../connectivity';
 import { findDevice, type MosSpec } from './devicelib';
+import { type RailName, railName, isRailName } from './types';
+export { type RailName, railName, isRailName };
 
 // ---------------- net semantics ----------------
 
@@ -98,11 +100,18 @@ export interface PowerSource {
   pmos?: boolean;
 }
 
+export interface PowerRail {
+  name: RailName;
+  v: number | null;
+  sources: PowerSource[];
+  loads: number;
+}
+
 export interface PowerTree {
-  rails: Map<string, { v: number | null; sources: PowerSource[]; loads: number }>;
+  rails: Map<RailName | string, PowerRail>;
   sources: PowerSource[];
   /** Rails with no identified producer (inputs from connectors/battery, or detection gaps). */
-  roots: string[];
+  roots: RailName[];
 }
 
 interface NetIndex {
@@ -153,7 +162,7 @@ export function discoverPowerTree(board: Board, conn: Conn, opts: PowerTreeOptio
     return m;
   };
   const sources: PowerSource[] = [];
-  const isRail = (n: string | undefined): n is string => !!n && netRole(n) === 'rail';
+  const isRail = (n: string | undefined): n is RailName => !!n && isRailName(n) && netRole(n) === 'rail';
 
   // FET terminal roles: device library when known, else by net semantics.
   const fetRoles = (c: Component): { D?: string; G?: string; S?: string; pmos?: boolean } | null => {
@@ -356,9 +365,11 @@ export function discoverPowerTree(board: Board, conn: Conn, opts: PowerTreeOptio
     }
   }
 
-  const rails = new Map<string, { v: number | null; sources: PowerSource[]; loads: number }>();
-  for (const [n, pins] of ix.pins) if (isRail(n)) rails.set(n, { v: railVoltage(n), sources: [], loads: pins.length });
-  for (const s of sources) rails.get(s.output)?.sources.push(s);
-  const roots = [...rails.entries()].filter(([, r]) => !r.sources.length).map(([n]) => n);
+  const rails = new Map<RailName | string, PowerRail>();
+  for (const [n, pins] of ix.pins) if (isRail(n)) rails.set(n, { name: n, v: railVoltage(n), sources: [], loads: pins.length });
+  for (const s of sources) {
+    if (isRailName(s.output)) rails.get(s.output)?.sources.push(s);
+  }
+  const roots: RailName[] = [...rails.values()].filter((r) => !r.sources.length).map((r) => r.name);
   return { rails, sources, roots };
 }

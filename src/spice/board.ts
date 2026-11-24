@@ -14,8 +14,8 @@
 import type { Board, Component, SwitchMap } from '../types';
 import { pinNet, type Conn } from '../connectivity';
 import { LED_INFO, MODELED, batteryRint, parseValue, rolePadName, twoRoles } from '../model';
-import type { Analysis, Circuit, Element, Model, ModelType, Subckt } from './types';
-import { emptyCircuit } from './types';
+import type { Analysis, Circuit, Element, Model, ModelType, SpiceNode, Subckt } from './types';
+import { emptyCircuit, SPICE_GND, spiceNode } from './types';
 import { parseSpice } from './netlist';
 import { parseSpiceNumber } from './units';
 import { VT_300K } from './devices';
@@ -102,7 +102,7 @@ export interface BoardSpiceOptions {
 export interface BoardNetlist {
   circuit: Circuit;
   /** Connectivity net index → SPICE node name. */
-  netNode: Map<number, string>;
+  netNode: Map<number, SpiceNode>;
   /** Connectivity net mapped to node "0" (-1 if none). */
   groundNet: number;
   parts: Map<string, PartMap>;
@@ -192,29 +192,30 @@ export function boardToCircuit(board: Board, conn: Conn, opts: BoardSpiceOptions
   if (groundNet < 0) warnings.push('No GND net or supply found; node voltages are referenced to gshunt only.');
 
   // --- node naming ---
-  const netNode = new Map<number, string>();
+  const netNode = new Map<number, SpiceNode>();
   const used = new Set<string>(['0', 'gnd']);
-  const node = (net: number): string => {
-    if (net === groundNet) return '0';
+  const node = (net: number): SpiceNode => {
+    if (net === groundNet) return SPICE_GND;
     let s = netNode.get(net);
     if (s) return s;
-    s = sanitize(conn.netNames[net] ?? `N${net}`);
-    if (used.has(s.toLowerCase())) s = `${s}_n${net}`;
-    used.add(s.toLowerCase());
+    let raw = sanitize(conn.netNames[net] ?? `N${net}`);
+    if (used.has(raw.toLowerCase())) raw = `${raw}_n${net}`;
+    used.add(raw.toLowerCase());
+    s = spiceNode(raw);
     netNode.set(net, s);
     return s;
   };
-  if (groundNet >= 0) netNode.set(groundNet, '0');
-  const floating = (c: Component, what: string) => {
+  if (groundNet >= 0) netNode.set(groundNet, SPICE_GND);
+  const floating = (c: Component, what: string): SpiceNode => {
     const s = sanitize(`NC_${c.ref}_${what}`);
     let name = s, k = 1;
     while (used.has(name.toLowerCase())) name = `${s}_${k++}`;
     used.add(name.toLowerCase());
-    return name;
+    return spiceNode(name);
   };
   // A cold joint with a known resistance is a series resistor between the part's terminal and
   // its copper; without one it is open (terminal floats).
-  const coldJoint = (c: Component, padName: string, what: string): string | null => {
+  const coldJoint = (c: Component, padName: string, what: string): SpiceNode | null => {
     const idx = conn.padItem.get(c);
     if (!idx) return null;
     for (let pi = 0; pi < c.pads.length; pi++) {
@@ -235,13 +236,13 @@ export function boardToCircuit(board: Board, conn: Conn, opts: BoardSpiceOptions
     }
     return null;
   };
-  const roleNode = (c: Component, role: string) => {
+  const roleNode = (c: Component, role: string): SpiceNode => {
     const n = pinNet(conn, c, role);
     if (n >= 0) return node(n);
     const pad = c.state.populated ? rolePadName(c, role) : undefined;
     return (pad !== undefined && coldJoint(c, pad, role)) || floating(c, role);
   };
-  const padNode = (c: Component, pad: string) => {
+  const padNode = (c: Component, pad: string): SpiceNode => {
     const idx = conn.padItem.get(c);
     if (idx) {
       for (let pi = 0; pi < c.pads.length; pi++) {
@@ -285,8 +286,8 @@ export function boardToCircuit(board: Board, conn: Conn, opts: BoardSpiceOptions
 
   const esd = (c: Component) => {
     if (!opts.esdPins || !/^U\d/.test(c.ref)) return;
-    const nodes = new Set<string>();
-    let gnd: string | undefined;
+    const nodes = new Set<SpiceNode>();
+    let gnd: SpiceNode | undefined;
     c.pads.forEach((p) => {
       const n = padNode(c, p.name);
       // the IC's ground is its declared ground net (node 0 may just be the meter's COM probe)
@@ -301,11 +302,11 @@ export function boardToCircuit(board: Board, conn: Conn, opts: BoardSpiceOptions
   const stub = (c: Component, why: string) => {
     esd(c);
     if (opts.unmodeled === 'omit') { report.push({ ref: c.ref, as: 'omitted', source: 'omitted', note: why }); return; }
-    const nodes: string[] = [];
+    const nodes: SpiceNode[] = [];
     const seen = new Set<string>();
     c.pads.forEach((p) => {
       const n = padNode(c, p.name);
-      if (n === '0' || seen.has(n.toLowerCase())) return;
+      if (n === SPICE_GND || seen.has(n.toLowerCase())) return;
       seen.add(n.toLowerCase());
       nodes.push(n);
     });

@@ -14,6 +14,16 @@ import { allDevices, findDevice, fitDiode, fitMos, inferDiodeConvention, resolve
 import { VT_300K } from '../src/spice/devices';
 import { expandDesignators, parseBomCsv } from '../src/io/bom';
 import { compileExpr, parseExpr } from '../src/spice/expr';
+import {
+  SPICE_GND,
+  spiceNode,
+  railName,
+  isRailName,
+  mnaIndex,
+  type SpiceNode,
+  type RailName,
+  type MnaIndex,
+} from '../src/spice/types';
 
 function assert(cond: unknown, msg = 'Assertion failed'): asserts cond {
   if (!cond) throw new Error(msg);
@@ -37,6 +47,38 @@ async function readFile(rel: string): Promise<Uint8Array> {
 }
 
 async function run() {
+  // ---- nominal branded types ----
+  {
+    const gnd: SpiceNode = SPICE_GND;
+    assert(gnd === '0', 'SPICE_GND is 0');
+    const nodeA: SpiceNode = spiceNode('out');
+    assert(nodeA === 'out', 'spiceNode preserves string value');
+    assert(typeof nodeA === 'string', 'SpiceNode is string at runtime');
+
+    const railA: RailName = railName('PP3V3');
+    assert(railA === 'PP3V3', 'railName preserves string value');
+    assert(typeof railA === 'string', 'RailName is string at runtime');
+
+    const mna1: MnaIndex = mnaIndex(42);
+    assert(mna1 === 42, 'mnaIndex preserves number value');
+    assert(typeof mna1 === 'number', 'MnaIndex is number at runtime');
+
+    assert(isRailName('PP3V3') === true, 'isRailName returns true for non-empty rail name');
+    assert(isRailName('') === false, 'isRailName returns false for empty string');
+    assert(isRailName('0') === false, 'isRailName returns false for ground 0');
+
+    // Compile-time nominal branding checks:
+    // @ts-expect-error SpiceNode cannot be assigned to RailName
+    const _err1: RailName = nodeA;
+    // @ts-expect-error RailName cannot be assigned to SpiceNode
+    const _err2: SpiceNode = railA;
+    // @ts-expect-error MnaIndex cannot be assigned to SpiceNode
+    const _err3: SpiceNode = mna1;
+    void _err1;
+    void _err2;
+    void _err3;
+  }
+
   // ---- numbers ----
   near(parseSpiceNumber('4.7k'), 4700, 1e-9, '4.7k');
   near(parseSpiceNumber('1meg'), 1e6, 1e-6, '1meg');
