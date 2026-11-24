@@ -103,11 +103,19 @@ export function parseInductor(s: string): InductorValue | undefined {
     rest = t.slice(bead![0].length);
   }
   for (const f of rest.split('-').filter(Boolean)) {
-    let m: RegExpExecArray | null;
-    if ((m = /^(\d+(?:\.\d+)?)(M?)A$/.exec(f))) out.amps ??= parseFloat(m[1]) * (m[2] ? 1e-3 : 1);
-    else if ((m = /^(\d+(?:\.\d+)?)(M?)OHMS?$/.exec(f))) out.dcr = parseFloat(m[1]) * (m[2] ? 1e-3 : 1);
-    else if (/^\d+(\.\d+)?%$/.test(f)) out.tol = f;
-    else if (!/^[\d.]+(GHZ|MHZ)?$/.test(f)) return undefined; // unknown field → not a value string
+    const ma = /^(\d+(?:\.\d+)?)(M?)A$/.exec(f);
+    if (ma) {
+      out.amps ??= parseFloat(ma[1]) * (ma[2] ? 1e-3 : 1);
+    } else {
+      const mo = /^(\d+(?:\.\d+)?)(M?)OHMS?$/.exec(f);
+      if (mo) {
+        out.dcr = parseFloat(mo[1]) * (mo[2] ? 1e-3 : 1);
+      } else if (/^\d+(\.\d+)?%$/.test(f)) {
+        out.tol = f;
+      } else if (!/^[\d.]+(GHZ|MHZ)?$/.test(f)) {
+        return undefined; // unknown field → not a value string
+      }
+    }
   }
   return out;
 }
@@ -153,7 +161,10 @@ function rowsOf(page: PdfPage): TextRun[][] {
   for (const t of page.text) {
     const k = Math.round(t.y * 2) / 2;
     let row = rows.get(k) ?? rows.get(k + 0.5) ?? rows.get(k - 0.5);
-    if (!row) rows.set(k, (row = []));
+    if (!row) {
+      row = [];
+      rows.set(k, row);
+    }
     row.push(t);
   }
   return [...rows.values()].map((r) => r.sort((a, b) => a.x - b.x));
@@ -281,7 +292,10 @@ export function extractSchematic(pages: PdfPage[], opts: ExtractOptions = {}): S
     for (const r of refRuns) {
       const toks = (claims.get(r) ?? []).sort((a, b) => local(r, b.t).v - local(r, a.t).v);
       let p = parts.get(r.text);
-      if (!p) parts.set(r.text, (p = { ref: r.text, pages: [], attrs: {}, tokens: [] }));
+      if (!p) {
+        p = { ref: r.text, pages: [], attrs: {}, tokens: [] };
+        parts.set(r.text, p);
+      }
       if (!p.pages.includes(page.index)) p.pages.push(page.index);
       for (const { t, above } of toks) classify(p, t.text.trim(), above);
     }

@@ -102,7 +102,7 @@ export const STAGE_INIT = (slow: number, frame: typeof FRAME) => {
   const BOARD = 'M7 4h15l6 6v15a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z';
   const TRACE = 'M4 17h7l2.5-7 3 13 2.5-8h4';
 
-  (window as any).__pr = {
+  window.__pr = {
     /** Frame (window) transform: tilt / fly. */
     frame: (t: { x?: number; y?: number; rx?: number; ry?: number; s?: number; o?: number }, ms: number, easing?: string) => {
       const tf = `perspective(2400px) translate3d(${t.x ?? 0}px,${t.y ?? 0}px,0px) rotateX(${t.rx ?? 0}deg) rotateY(${t.ry ?? 0}deg) scale(${t.s ?? 1})`;
@@ -121,12 +121,15 @@ export const STAGE_INIT = (slow: number, frame: typeof FRAME) => {
     cap: (n: string, title: string, sub: string) => {
       const c = $('pr-cap');
       const out = Array.from(c.children) as HTMLElement[];
-      out.forEach((e) => e.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: d(220), fill: 'forwards' }));
+      out.forEach((e) => { e.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: d(220), fill: 'forwards' }); });
       setTimeout(() => {
         c.innerHTML = title ? `<span class="n">${n}</span><span class="t">${title}</span><span class="s">${sub}</span>` : '';
-        (Array.from(c.children) as HTMLElement[]).forEach((e, i) => e.animate(
-          [{ opacity: 0, transform: 'translateX(-24px)' }, { opacity: 1, transform: 'none' }],
-          { duration: d(480), delay: d(i * 90), easing: ease, fill: 'forwards' }));
+        (Array.from(c.children) as HTMLElement[]).forEach((e, i) => {
+          e.animate(
+            [{ opacity: 0, transform: 'translateX(-24px)' }, { opacity: 1, transform: 'none' }],
+            { duration: d(480), delay: d(i * 90), easing: ease, fill: 'forwards' },
+          );
+        });
       }, d(out.length ? 240 : 0));
     },
     /** Big centred title (kinetic words). */
@@ -230,6 +233,6 @@ export const STAGE_INIT = (slow: number, frame: typeof FRAME) => {
       document.body.appendChild(e);
       e.animate([{ opacity: 0, transform: 'scale(1.4)' }, { opacity: 1, transform: 'none' }], { duration: d(380), easing: ease, fill: 'forwards' });
     },
-    clearHl: () => document.querySelectorAll('.pr-hl').forEach((e) => e.remove()),
+    clearHl: () => { document.querySelectorAll('.pr-hl').forEach((e) => { e.remove(); }); },
   };
 };
