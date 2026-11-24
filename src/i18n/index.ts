@@ -460,6 +460,15 @@ export const DICT_PL: I18nDict = {
         'Wymień uszkodzony element dzielnika, aby odblokować start przetwornicy.',
       ],
     },
+    'builtin-diesel-ecu': {
+      title: 'Sterownik silnika Diesel ECU: Brak zasilania czujników 5V',
+      description: 'Sterownik silnika Diesla Common Rail (architektura Bosch EDC). Diagnostyka OBD zgłasza kody błędów P0641 i P0651 (zwarcie w obwodzie napięcia referencyjnego 5V czujników). Główna szyna logiczna 5V procesora pracuje, lecz szyna zasilania sensorów leży na poziomie 0 V. Zlokalizuj zwarty kondensator filtrujący MLCC, usuń zwarcie i wymień bezpiecznik.',
+      hints: [
+        'Włącz zasilanie i zmierz napięcie multimetrem w trybie V⎓ na punktach TP_5V oraz TP_SENS. Szyna procesora ma 5.0 V, ale szyna czujników ma 0 V!',
+        'Wyłącz zasilanie i przełącz multimetr w tryb Ω. Zmierz rezystancję od TP_SENS do masy TP_GND — wynosi ~0 Ω, co wskazuje na twarde zwarcie w linii.',
+        'Obejrzyj kondensator C2_SENS na spodzie płytki: zlokalizuj mostek zwarciowy pod elementem MLCC, usuń go plecionką rozlutowniczą i wstaw sprawny kondensator 10 µF, a w razie potrzeby wymień bezpiecznik F1.',
+      ],
+    },
   },
   categories: {
     beginner: 'Dla początkujących',
@@ -729,6 +738,15 @@ export const DICT_EN: I18nDict = {
     'demo-antmicro-jetson-nano-bb': {
       title: 'Antmicro baseboard · no 3.3 V, flaky 5 V',
       description: 'Nvidia Jetson Nano carrier baseboard (392 parts). Regulators fail to start up due to a blown divider resistor on the Enable pin.',
+    },
+    'builtin-diesel-ecu': {
+      title: 'Diesel ECU: No 5V Sensor Supply',
+      description: 'Common rail diesel powertrain engine control unit (Bosch EDC architecture). Scan tool reports DTC P0641 and P0651 (Sensor Reference Voltage A/B Circuit Open/Short). The MCU 5V logic rail is nominal, but the sensor rail is grounded. Find the shorted MLCC filter capacitor, clean up the short, and replace the blown protection fuse.',
+      hints: [
+        'Turn on the bench power supply and check voltages with the DMM in V⎓ mode on TP_5V and TP_SENS. Logic rail is 5.0 V, but the sensor rail is at 0 V!',
+        'Switch off power and switch DMM to Ω resistance mode. Measure from TP_SENS to TP_GND — reads ~0 Ω, indicating a dead short.',
+        'Inspect C2_SENS on the bottom layer: find the solder bridge blob under the MLCC, wick it away, replace C2_SENS (10 µF), and replace blown fuse F1 (1 A).',
+      ],
     },
   },
   categories: {
