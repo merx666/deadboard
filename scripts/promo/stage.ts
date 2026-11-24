@@ -121,15 +121,12 @@ export const STAGE_INIT = (slow: number, frame: typeof FRAME) => {
     cap: (n: string, title: string, sub: string) => {
       const c = $('pr-cap');
       const out = Array.from(c.children) as HTMLElement[];
-      out.forEach((e) => { e.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: d(220), fill: 'forwards' }); });
+      out.forEach((e) => void e.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: d(220), fill: 'forwards' }));
       setTimeout(() => {
         c.innerHTML = title ? `<span class="n">${n}</span><span class="t">${title}</span><span class="s">${sub}</span>` : '';
-        (Array.from(c.children) as HTMLElement[]).forEach((e, i) => {
-          e.animate(
-            [{ opacity: 0, transform: 'translateX(-24px)' }, { opacity: 1, transform: 'none' }],
-            { duration: d(480), delay: d(i * 90), easing: ease, fill: 'forwards' },
-          );
-        });
+        (Array.from(c.children) as HTMLElement[]).forEach((e, i) => void e.animate(
+          [{ opacity: 0, transform: 'translateX(-24px)' }, { opacity: 1, transform: 'none' }],
+          { duration: d(480), delay: d(i * 90), easing: ease, fill: 'forwards' }));
       }, d(out.length ? 240 : 0));
     },
     /** Big centred title (kinetic words). */
@@ -233,6 +230,6 @@ export const STAGE_INIT = (slow: number, frame: typeof FRAME) => {
       document.body.appendChild(e);
       e.animate([{ opacity: 0, transform: 'scale(1.4)' }, { opacity: 1, transform: 'none' }], { duration: d(380), easing: ease, fill: 'forwards' });
     },
-    clearHl: () => { document.querySelectorAll('.pr-hl').forEach((e) => { e.remove(); }); },
+    clearHl: () => document.querySelectorAll('.pr-hl').forEach((e) => void e.remove()),
   };
 };

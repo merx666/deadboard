@@ -201,6 +201,7 @@ export class PcbApp {
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
   private modBoards = new Map<Scenario, ModBoard>();
   private presetStubs = new Map<Scenario, BoardPresetMeta>();
+  private openScenarioSeq = 0;
   private modResult: ModLoadResult = { mods: [], failed: [] };
   private schematicUrls = new Map<ModBoard, string>();
   private boardSearch = '';
@@ -841,6 +842,7 @@ export class PcbApp {
       const stub: Scenario = {
         format: 'pcbfix/1',
         id: m.id,
+        solver: 'spice-power',
         objectives: [],
         meta: {
           title: isPl ? m.titlePl : m.titleEn,
@@ -918,6 +920,7 @@ export class PcbApp {
 
   /** Opens a scenario, fetching a demo board on first use. */
   private async openScenario(idx: number) {
+    const seq = ++this.openScenarioSeq;
     let sc = this.scenarios[idx];
     const meta = this.presetStubs.get(sc);
     if (meta) {
@@ -925,8 +928,11 @@ export class PcbApp {
       try {
         const full = await meta.load();
         this.presetStubs.delete(sc);
-        this.scenarios[idx] = sc = full;
+        this.scenarios[idx] = full;
+        if (seq !== this.openScenarioSeq) return;
+        sc = full;
       } catch (err) {
+        if (seq !== this.openScenarioSeq) return;
         this.toast(`Could not load preset board: ${err instanceof Error ? err.message : err}`, 'danger');
         this.refreshScenarioSelect();
         return;
@@ -939,8 +945,11 @@ export class PcbApp {
         const full = await mb.load();
         this.modBoards.delete(sc);
         this.modBoards.set(full, mb);
-        this.scenarios[idx] = sc = full;
+        this.scenarios[idx] = full;
+        if (seq !== this.openScenarioSeq) return;
+        sc = full;
       } catch (err) {
+        if (seq !== this.openScenarioSeq) return;
         this.toast(`Could not load ${sc.meta.title} (mod "${mb.mod.name}"): ${err instanceof Error ? err.message : err}`, 'danger');
         return;
       }
@@ -954,13 +963,17 @@ export class PcbApp {
         const { importScenarioOrPcb } = await import('../io/kicad');
         const full = importScenarioOrPcb('demo.pcbfix.json', await res.text());
         this.demoUrls.delete(sc);
-        this.scenarios[idx] = sc = full;
+        this.scenarios[idx] = full;
+        if (seq !== this.openScenarioSeq) return;
+        sc = full;
       } catch (err) {
+        if (seq !== this.openScenarioSeq) return;
         this.toast(`Could not load the demo board: ${err instanceof Error ? err.message : err}`, 'danger');
         this.refreshScenarioSelect();
         return;
       }
     }
+    if (seq !== this.openScenarioSeq) return;
     this.loadScenario(sc);
   }
 
@@ -3786,7 +3799,7 @@ export class PcbApp {
   private classifyScenario(s: Scenario): 'tutorials' | 'challenges' | 'hardware' | 'mods' {
     if (this.modBoards.has(s)) return 'mods';
     if (isTutorialScenario(s.id)) return 'tutorials';
-    if (s.solver === 'spice-power' || this.demoUrls.has(s) || s.board.components.length > 50) {
+    if (this.presetStubs.has(s) || s.solver === 'spice-power' || this.demoUrls.has(s) || s.board.components.length > 50) {
       return 'hardware';
     }
     return 'challenges';
