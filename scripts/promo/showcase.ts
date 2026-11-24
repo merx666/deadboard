@@ -34,8 +34,18 @@ class Show {
   mark(name: string) { this.marks[name] = (Date.now() - this.t0) / 1000 / SLOW; }
   /** Holds for `sec` seconds of OUTPUT time. */
   hold(sec: number) { return this.page.waitForTimeout(sec * 1000 * SLOW); }
-  pr(fn: string, ...a: unknown[]) { return this.page.evaluate(([f, x]) => (window as any).__pr[f as string](...(x as unknown[])), [fn, a] as const); }
-  app<T>(fn: string, ...a: unknown[]): Promise<T> { return this.page.evaluate(([f, x]) => (window as any).deadboard[f as string](...(x as unknown[])), [fn, a] as const) as Promise<T>; }
+  pr(fn: string, ...a: unknown[]) {
+    return this.page.evaluate(([f, x]) => {
+      const p = window.__pr as unknown as Record<string, ((...args: unknown[]) => unknown) | undefined>;
+      return p?.[f]?.(...x);
+    }, [fn, a] as const);
+  }
+  app<T>(fn: string, ...a: unknown[]): Promise<T> {
+    return this.page.evaluate(([f, x]) => {
+      const d = window.deadboard as unknown as Record<string, ((...args: unknown[]) => unknown) | undefined>;
+      return d?.[f]?.(...x) as T;
+    }, [fn, a] as const);
+  }
 
   async moveTo(x: number, y: number) {
     this.last = { x, y };
@@ -277,8 +287,8 @@ async function main() {
     // tsx may wrap functions in __name(); give the page a no-op so the serialized stage runs
     await page.addInitScript({ content: `var __name = (f) => f; (${STAGE_INIT.toString()})(${SLOW}, ${JSON.stringify(FRAME)});` });
     await page.goto(`${BASE}/app.html?automation=1`);
-    await page.waitForFunction(() => (window as any).deadboard?.ready() && (window as any).__pr, null, { timeout: 60000 });
-    await page.evaluate((id) => (window as any).deadboard.open(id), 'demo-mnt-reform2-mb30');
+    await page.waitForFunction(() => window.deadboard?.ready() && window.__pr, null, { timeout: 60000 });
+    await page.evaluate((id) => window.deadboard?.open(id), 'demo-mnt-reform2-mb30');
     await page.locator('#tut-close').click({ timeout: 1000 }).catch(() => {});
     await page.waitForTimeout(2500); // board load + power-up sequence settles before the first frame
 

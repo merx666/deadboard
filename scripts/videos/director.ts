@@ -15,8 +15,58 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 export const VIEW = { width: 1280, height: 720 };
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-type Side = 'F' | 'B';
-interface Cue { start: number; end: number; text: string }
+export type Side = 'F' | 'B';
+export interface Cue { start: number; end: number; text: string }
+
+declare global {
+  interface DeadboardAutomation {
+    ready: () => boolean;
+    scenario: () => string;
+    open: (id: string) => Promise<boolean>;
+    pads: (ref: string) => { name: string; net: string }[];
+    part: (ref: string) => { x: number; y: number; side: Side } | null | undefined;
+    pad: (ref: string, name: string) => { x: number; y: number; side: Side } | null;
+    focus: (x: number, y: number, halfH?: number, side?: Side) => void;
+    fit: () => void;
+    side: () => Side;
+    toScreen: (x: number, y: number, side?: Side) => { x: number; y: number };
+  }
+
+  interface DirectorOverlay {
+    move: (x: number, y: number) => void;
+    ring: (x: number, y: number) => void;
+    caption: (html: string) => void;
+    hl: (x: number, y: number, w: number, h: number, label?: string, warn?: boolean, below?: boolean) => void;
+    clear: () => void;
+    card: (html: string) => void;
+  }
+
+  interface StagePromo {
+    frame: (t: { x?: number; y?: number; rx?: number; ry?: number; s?: number; o?: number }, ms: number, easing?: string) => void;
+    zoom: (vx: number, vy: number, s: number, ms: number) => void;
+    cap: (n: string, title: string, sub: string) => void;
+    title: (big: string, sub?: string, y?: number) => void;
+    hook: (big: string, sub: string) => void;
+    hookOut: (ms?: number) => void;
+    titleOut: (ms?: number) => void;
+    intro: () => void;
+    logo: (big?: boolean) => void;
+    logoUp: (y: number, s: number, ms: number) => void;
+    logoOut: (ms?: number) => void;
+    bullets: (items: string[], y: number) => void;
+    link: (text: string, y: number, prefix?: string) => void;
+    cursor: (x: number, y: number, show?: boolean) => void;
+    ring: (x: number, y: number) => void;
+    hl: (x: number, y: number, w: number, h: number, label: string) => void;
+    clearHl: () => void;
+  }
+
+  interface Window {
+    deadboard?: DeadboardAutomation;
+    __dir?: DirectorOverlay;
+    __pr?: StagePromo;
+  }
+}
 
 /** In-page overlay: cursor, click ring, caption bar; flags are blurred so videos never leak them. */
 const OVERLAY = `(() => {
@@ -93,7 +143,7 @@ export class Take {
 
   async start() {
     await this.page.evaluate(OVERLAY);
-    await this.page.evaluate(([x, y]) => (window as any).__dir.move(x, y), [this.cursor.x, this.cursor.y]);
+    await this.page.evaluate(([x, y]) => window.__dir?.move(x, y), [this.cursor.x, this.cursor.y]);
     await this.wait(400);
     this.t0 = Date.now();
   }
@@ -133,7 +183,7 @@ export class Take {
     const fmt = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
     const html = (o.step ? `<div class="k">${fmt(o.step.toUpperCase())}</div>` : '') + `<div class="m">${fmt(text)}</div>`
       + (o.why ? `<div class="w"><i>Why:</i> ${fmt(o.why)}</div>` : '');
-    await this.page.evaluate((h) => (window as any).__dir.caption(h), html);
+    await this.page.evaluate((h) => window.__dir?.caption(h), html);
     const plain = (x: string) => x.replace(/\*\*/g, '');
     this.captionOn = { text: [o.step ? o.step.toUpperCase() : '', plain(text), o.why ? `Why: ${plain(o.why)}` : ''].filter(Boolean).join('\n'), start: this.elapsed };
     const chars = text.length + (o.why?.length ?? 0);
@@ -143,20 +193,20 @@ export class Take {
   /** Full-screen title card (opening / closing): kicker, title, bullet lines. */
   async card(kicker: string, title: string, lines: string[], holdMs?: number) {
     await this.endCaption();
-    await this.page.evaluate(() => (window as any).__dir.caption(''));
+    await this.page.evaluate(() => window.__dir?.caption(''));
     const fmt = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
     const html = `<div class="k">${fmt(kicker)}</div><h1>${fmt(title)}</h1><ul>${lines.map((l) => `<li>${fmt(l)}</li>`).join('')}</ul>`;
-    await this.page.evaluate((h) => (window as any).__dir.card(h), html);
+    await this.page.evaluate((h) => window.__dir?.card(h), html);
     this.captionOn = { text: [kicker, title, ...lines].map((x) => x.replace(/\*\*/g, '')).join('\n'), start: this.elapsed };
     await this.hold(holdMs ?? Math.min(14000, 2500 + lines.join('').length * 55));
     await this.endCaption();
-    await this.page.evaluate(() => (window as any).__dir.card(''));
+    await this.page.evaluate(() => window.__dir?.card(''));
     await this.wait(400);
   }
 
   /** Highlight box around a screen rectangle (CSS px). */
   private async hlRect(x: number, y: number, w: number, h: number, label?: string, warn = false) {
-    await this.page.evaluate(([a, b, c, d, l, wn, below]) => (window as any).__dir.hl(a, b, c, d, l, wn, below), [x, y, w, h, label ?? '', warn, y < 120] as const);
+    await this.page.evaluate(([a, b, c, d, l, wn, below]) => window.__dir?.hl(a, b, c, d, l, wn, below), [x, y, w, h, label ?? '', warn, y < 120] as const);
     await this.wait(250);
   }
   /** Highlight a UI element. */
@@ -173,7 +223,7 @@ export class Take {
   }
   async highlightPart(ref: string, label?: string, halfMm = 3, warn = false) { const p = await this.part(ref); await this.highlightBoard(p.x, p.y, halfMm, label ?? ref, warn); }
   async highlightPad(ref: string, pad: string, label?: string, warn = false) { const p = await this.pad(ref, pad); await this.highlightBoard(p.x, p.y, 1.2, label ?? `${ref}.${pad}`, warn); }
-  async clear() { await this.page.evaluate(() => (window as any).__dir.clear()); }
+  async clear() { await this.page.evaluate(() => window.__dir?.clear()); }
 
   private async endCaption() {
     if (!this.captionOn) return;
@@ -183,27 +233,27 @@ export class Take {
 
   async moveTo(x: number, y: number) {
     this.cursor = { x, y };
-    await this.page.evaluate(([a, b]) => (window as any).__dir.move(a, b), [x, y]);
+    await this.page.evaluate(([a, b]) => window.__dir?.move(a, b), [x, y]);
     await this.page.mouse.move(x, y, { steps: 8 });
     await this.wait(600);
   }
 
   async clickAt(x: number, y: number, opts: { button?: 'left' | 'right' } = {}) {
     await this.moveTo(x, y);
-    await this.page.evaluate(([a, b]) => (window as any).__dir.ring(a, b), [x, y]);
+    await this.page.evaluate(([a, b]) => window.__dir?.ring(a, b), [x, y]);
     await this.page.mouse.click(x, y, { button: opts.button ?? 'left' });
     await this.wait(450);
   }
 
   /** Board point (mm) on a side → screen, via the app's automation hook. */
   async screenOf(x: number, y: number, side?: Side) {
-    return this.page.evaluate(([a, b, s]) => (window as any).deadboard.toScreen(a, b, s ?? undefined), [x, y, side ?? null] as const);
+    return this.page.evaluate(([a, b, s]) => window.deadboard!.toScreen(a, b, s ?? undefined), [x, y, side ?? null] as const);
   }
 
   async clickBoard(x: number, y: number, side?: Side, opts: { button?: 'left' | 'right' } = {}) {
     let p = await this.screenOf(x, y, side);
     // a HUD panel (supply, meter, scope) may cover the target: bring it to the middle of the view
-    const covered = await this.page.evaluate(([a, b]) => { const el = document.elementFromPoint(a, b); return !el || el.tagName !== 'CANVAS'; }, [p.x, p.y]);
+    const covered = await this.page.evaluate(([a, b]) => { const el = document.elementFromPoint(a, b); return el?.tagName !== 'CANVAS'; }, [p.x, p.y]);
     if (covered) {
       await this.focus(x, y, 12);
       p = await this.screenOf(x, y, side);
@@ -212,20 +262,20 @@ export class Take {
   }
 
   async pad(ref: string, name: string): Promise<{ x: number; y: number; side: Side }> {
-    const p = await this.page.evaluate(([r, n]) => (window as any).deadboard.pad(r, n), [ref, name]);
+    const p = await this.page.evaluate(([r, n]) => window.deadboard!.pad(r, n), [ref, name]);
     if (!p) throw new Error(`no pad ${ref}.${name}`);
     return p;
   }
 
   async part(ref: string): Promise<{ x: number; y: number; side: Side }> {
-    const p = await this.page.evaluate((r) => (window as any).deadboard.part(r), ref);
+    const p = await this.page.evaluate((r) => window.deadboard!.part(r), ref);
     if (!p) throw new Error(`no part ${ref}`);
     return p;
   }
 
   /** Pad of `ref` whose net name matches. */
   async padOnNet(ref: string, re: RegExp) {
-    const pads = await this.page.evaluate((r) => (window as any).deadboard.pads(r), ref) as { name: string; net: string }[];
+    const pads = await this.page.evaluate((r) => window.deadboard!.pads(r), ref);
     const p = pads.find((q) => re.test(q.net));
     if (!p) throw new Error(`${ref}: no pad on ${re}`);
     return this.pad(ref, p.name);
@@ -259,14 +309,14 @@ export class Take {
 
   async focus(x: number, y: number, halfH = 10, side?: Side) {
     await this.clear();
-    await this.page.evaluate(([a, b, h, s]) => (window as any).deadboard.focus(a, b, h, s ?? undefined), [x, y, halfH, side ?? null] as const);
+    await this.page.evaluate(([a, b, h, s]) => window.deadboard!.focus(a, b, h, s ?? undefined), [x, y, halfH, side ?? null] as const);
     await this.wait(700);
   }
 
   /** Centres the camera on a part, keeping the side currently viewed. */
   async focusPart(ref: string, halfH = 8) { const p = await this.part(ref); await this.focus(p.x, p.y, halfH); }
-  async fit() { await this.clear(); await this.page.evaluate(() => (window as any).deadboard.fit()); await this.wait(500); }
-  side(): Promise<Side> { return this.page.evaluate(() => (window as any).deadboard.side()); }
+  async fit() { await this.clear(); await this.page.evaluate(() => window.deadboard!.fit()); await this.wait(500); }
+  side(): Promise<Side> { return this.page.evaluate(() => window.deadboard!.side() as Side); }
   async flipTo(side: Side) { if ((await this.side()) !== side) { await this.clear(); await this.key('f'); await this.wait(900); } }
 
   async benchSelect(selector: string, value: string) {
@@ -279,7 +329,7 @@ export class Take {
   async finish() {
     await this.clear();
     await this.endCaption();
-    await this.page.evaluate(() => (window as any).__dir.caption(''));
+    await this.page.evaluate(() => window.__dir?.caption(''));
     await this.wait(600);
     return { cues: this.cues, t0: this.t0, end: this.elapsed };
   }
@@ -310,11 +360,11 @@ export class Director {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto(`${this.baseUrl}/app.html?automation=1`);
-    await page.waitForFunction(() => (window as any).deadboard?.ready());
-    if (!(await page.evaluate((id) => (window as any).deadboard.open(id), scenarioId))) throw new Error(`unknown scenario ${scenarioId}`);
+    await page.waitForFunction(() => window.deadboard?.ready());
+    if (!(await page.evaluate((id) => window.deadboard!.open(id), scenarioId))) throw new Error(`unknown scenario ${scenarioId}`);
     // close the beginner tutorial so the board is unobstructed
     await page.locator('#tut-close').click({ timeout: 1500 }).catch(() => {});
-    await page.evaluate(() => (window as any).deadboard.fit());
+    await page.evaluate(() => window.deadboard!.fit());
     await page.waitForTimeout(1200);
 
     // frame capture loop
