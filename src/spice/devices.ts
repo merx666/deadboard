@@ -112,7 +112,7 @@ function waveBreakpoints(w: Waveform, tstop: number, tstep: number): number[] {
 export class Resistor extends Device {
   constructor(name: string, readonly a: number, readonly b: number, readonly r: number) { super(name); }
   load(ctx: Ctx) { stampG(ctx.A, this.a, this.b, 1 / this.r); }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.a) - V(x, this.b), i = v / this.r;
     return { i, p: v * i, v };
   }
@@ -132,11 +132,11 @@ export class Capacitor extends Device {
     const v = V(ctx.x, this.a) - V(ctx.x, this.b);
     this.iNow = geq * v + ieq;
   }
-  initTran(ctx: Ctx, uic: boolean) {
+  override initTran(ctx: Ctx, uic: boolean) {
     this.vPrev = uic && this.ic !== undefined ? this.ic : uic ? 0 : V(ctx.x, this.a) - V(ctx.x, this.b);
     this.iPrev = 0;
   }
-  accept(ctx: Ctx) {
+  override accept(ctx: Ctx) {
     if (ctx.mode !== 'tran') return;
     const v = V(ctx.x, this.a) - V(ctx.x, this.b);
     const geq = ctx.method === 'trap' ? (2 * this.c) / ctx.h : this.c / ctx.h;
@@ -144,7 +144,7 @@ export class Capacitor extends Device {
     this.vPrev = v;
     this.iNow = this.iPrev;
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.a) - V(x, this.b);
     return { i: this.iNow, p: v * this.iNow, v };
   }
@@ -161,16 +161,16 @@ export class Inductor extends Device {
     ctx.A.add(this.j, this.j, -req);
     ctx.b[this.j] += ctx.method === 'trap' ? -req * this.iPrev - this.vPrev : -req * this.iPrev;
   }
-  initTran(ctx: Ctx, uic: boolean) {
+  override initTran(ctx: Ctx, uic: boolean) {
     this.iPrev = uic ? this.ic ?? 0 : ctx.x[this.j];
     this.vPrev = uic ? 0 : V(ctx.x, this.a) - V(ctx.x, this.b);
   }
-  accept(ctx: Ctx) {
+  override accept(ctx: Ctx) {
     if (ctx.mode !== 'tran') return;
     this.iPrev = ctx.x[this.j];
     this.vPrev = V(ctx.x, this.a) - V(ctx.x, this.b);
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.a) - V(x, this.b), i = x[this.j];
     return { i, p: v * i, v };
   }
@@ -189,8 +189,8 @@ export class VSource extends Device {
     stampBranch(ctx.A, this.p, this.m, this.j);
     ctx.b[this.j] += this.value(ctx);
   }
-  breakpoints(tstop: number, tstep: number) { return waveBreakpoints(this.wave, tstop, tstep); }
-  report(x: Float64Array): DevReport {
+  override breakpoints(tstop: number, tstep: number) { return waveBreakpoints(this.wave, tstop, tstep); }
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.p) - V(x, this.m), i = x[this.j];
     // SPICE sign: positive branch current flows into the + node, so a source delivering power has i < 0.
     return { i, p: -v * i, v };
@@ -207,8 +207,8 @@ export class ISource extends Device {
     this.last = i;
     stampI(ctx.b, this.p, this.m, i);
   }
-  breakpoints(tstop: number, tstep: number) { return waveBreakpoints(this.wave, tstop, tstep); }
-  report(x: Float64Array): DevReport {
+  override breakpoints(tstop: number, tstep: number) { return waveBreakpoints(this.wave, tstop, tstep); }
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.p) - V(x, this.m);
     return { i: this.last, p: -v * this.last, v };
   }
@@ -221,7 +221,7 @@ export class VCVS extends Device {
     ctx.A.add(this.j, this.cp, -this.gain);
     ctx.A.add(this.j, this.cm, this.gain);
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.p) - V(x, this.m), i = x[this.j];
     return { i, p: -v * i, v };
   }
@@ -234,7 +234,7 @@ export class VCCS extends Device {
     A.add(this.p, this.cp, g); A.add(this.p, this.cm, -g);
     A.add(this.m, this.cp, -g); A.add(this.m, this.cm, g);
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const i = this.gm * (V(x, this.cp) - V(x, this.cm));
     const v = V(x, this.p) - V(x, this.m);
     return { i, p: v * i, v };
@@ -361,9 +361,9 @@ export class Diode extends Device {
     stampNL(ctx, this.k, -id, [[-gd, this.ai, this.k, vd]]);
     this.cap?.load(ctx);
   }
-  initTran(ctx: Ctx, uic: boolean) { this.cap?.initTran(ctx, uic); }
-  accept(ctx: Ctx) { this.cap?.accept(ctx); }
-  report(x: Float64Array): DevReport {
+  override initTran(ctx: Ctx, uic: boolean) { this.cap?.initTran(ctx, uic); }
+  override accept(ctx: Ctx) { this.cap?.accept(ctx); }
+  override report(x: Float64Array): DevReport {
     const vd = V(x, this.ai) - V(x, this.k);
     const [id] = this.iv(vd);
     const v = V(x, this.a) - V(x, this.k);
@@ -440,7 +440,7 @@ export class Mosfet extends Device {
     stampNL(ctx, dE, iReal, terms);
     stampNL(ctx, sE, -iReal, terms.map(([g, p, m, v0]) => [-g, p, m, v0] as [number, number, number, number]));
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const { vgs, vds } = this.evalAt(x);
     const rev = vds < 0;
     const [id] = this.ids(rev ? vgs - vds : vgs, rev ? -vds : vds);
@@ -504,7 +504,7 @@ export class Bjt extends Device {
     stampNL(ctx, this.bN, ib, [[pbe, this.bN, this.e, VBE], [pbc, this.bN, this.c, VBC]]);
     stampNL(ctx, this.e, -(ic + ib), [[-(a + pbe), this.bN, this.e, VBE], [-(bc + pbc), this.bN, this.c, VBC]]);
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const sg = this.sign;
     const vbe = sg * (V(x, this.bN) - V(x, this.e)), vbc = sg * (V(x, this.bN) - V(x, this.c));
     const m = this.model(vbe, vbc);
@@ -539,8 +539,8 @@ export class Switch extends Device {
     if (s !== this.state) { this.state = s; ctx.noncon = true; }
     stampG(ctx.A, this.p, this.m, 1 / (this.state ? this.P.RON : this.P.ROFF));
   }
-  accept(ctx: Ctx) { this.accepted = this.state = this.decide(ctx.x); }
-  report(x: Float64Array): DevReport {
+  override accept(ctx: Ctx) { this.accepted = this.state = this.decide(ctx.x); }
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.p) - V(x, this.m), i = v / (this.state ? this.P.RON : this.P.ROFF);
     return { i, p: v * i, v, extra: { on: this.state ? 1 : 0 } };
   }
@@ -570,7 +570,7 @@ export class BSource extends Device {
       stampI(ctx.b, this.p, this.m, lin);
     }
   }
-  report(x: Float64Array): DevReport {
+  override report(x: Float64Array): DevReport {
     const v = V(x, this.p) - V(x, this.m);
     const i = this.mode === 'V' ? x[this.j] : this.last;
     return { i, p: this.mode === 'V' ? -v * i : v * i, v };
