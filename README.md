@@ -72,55 +72,55 @@ flowchart TD
   %% Diagram Design System (cathrynlavery/diagram-design)
   %% Editorial monochromatic palette with single flame-orange (#ff6b00) accent
 
-  subgraph UI ["<b>Workbench & UI Controllers</b> · <i>src/ui/</i>"]
-    PcbApp["<b>PcbApp Host</b><br/><code>app.ts</code> · 60/120Hz RAF Loop & Undo Stack"]
-    Tools["<b>Bench Instruments</b><br/>6000-count DMM · Roll Scope · Lab PSU · Rework Iron"]
-    Modals["<b>Modular Modal Controllers</b><br/>OrderModal · PartsBinModal · ReportModal · ShortcutsModal · HelpModal"]
-    Creator["<b>CAD Board Creator</b><br/>Interactive DRC & 45° Autorouter"]
+  subgraph UI ["Workbench and UI Controllers (src/ui/)"]
+    PcbApp["PcbApp Host<br/>app.ts · 60/120Hz RAF Loop and Undo Stack"]
+    Tools["Bench Instruments<br/>6000-count DMM · Roll Scope · Lab PSU · Rework Iron"]
+    Modals["Modular Modal Controllers<br/>Order · PartsBin · Boards · Mods · Report · Shortcuts · Help · Feedback"]
+    Creator["CAD Board Creator<br/>Interactive DRC and 45° Autorouter"]
   end
 
-  subgraph Engine ["<b>Simulation & Multi-Physics Solvers</b> · <i>src/sim.ts & src/spice/</i>"]
-    FastSim["<b>Fast MNA Solver</b><br/>BFS Net Disconnection & Matrix Nodal Engine"]
-    SpiceEngine["<b>Non-Linear SPICE Engine</b><br/>Newton-Raphson · Transient Rails · Power Tree"]
-    Thermal["<b>2D Thermal & Flex Field</b><br/>Joule Heating · Emissivity · Freeze Spray · IPA Drying"]
-    Intermittent["<b>Intermittent Strain Model</b><br/>Thermal Hysteresis & Mechanical Micro-cracks"]
+  subgraph Engine ["Simulation and Multi-Physics Solvers (src/sim.ts and src/spice/)"]
+    FastSim["Fast MNA Solver<br/>BFS Net Disconnection and Matrix Nodal Engine"]
+    SpiceEngine["Non-Linear SPICE Engine<br/>Newton-Raphson · Transient Rails · Power Tree"]
+    Thermal["2D Thermal and Flex Field<br/>Joule Heating · Emissivity · Freeze Spray · IPA Drying"]
+    Intermittent["Intermittent Strain Model<br/>Thermal Hysteresis and Mechanical Micro-cracks"]
   end
 
-  subgraph Render ["<b>Hardware-Accelerated Viewport</b> · <i>src/render/</i>"]
-    WebGPU["<b>WebGPU Graphics Pipeline</b><br/>Custom Shaders · Copper Traces · Soldermask · Thermal IR"]
-    Camera["<b>Orbit & Projection Camera</b><br/>Dual-Side 2D/3D Transform Matrix"]
+  subgraph Render ["Hardware-Accelerated Viewport (src/render/)"]
+    WebGPU["WebGPU Graphics Pipeline<br/>Custom Shaders · Copper Traces · Soldermask · Thermal IR"]
+    Camera["Orbit and Projection Camera<br/>Dual-Side 2D/3D Transform Matrix"]
   end
 
-  subgraph CAM ["<b>Industrial Hardware & CAM Pipeline</b> · <i>src/io/ & src/parts/</i>"]
-    GerberGen["<b>Industrial CAM Exporter</b><br/>RS-274X Gerber & Excellon Drill ZIP Archive"]
-    BOM["<b>BOM & SMT Centroid CPL</b><br/>Real-Time Parts Catalog & Supplier Quotation"]
-    Importers["<b>EDA Importers</b><br/>KiCad (.kicad_pcb) & OpenBoardView (.brd)"]
+  subgraph CAM ["Industrial Hardware and CAM Pipeline (src/io/ and src/parts/)"]
+    GerberGen["Industrial CAM Exporter<br/>RS-274X Gerber and Excellon Drill ZIP Archive"]
+    BOM["BOM and SMT Centroid CPL<br/>Real-Time Parts Catalog and Supplier Quotation"]
+    Importers["EDA Importers<br/>KiCad .kicad_pcb and OpenBoardView .brd"]
   end
 
-  subgraph Security ["<b>Verification & Modding Core</b> · <i>src/crypto.ts & src/mods/</i>"]
-    Crypto["<b>Topological Cryptographic Verifier</b><br/>SHA-256 / HMAC Graph Hash & CTF Flag Decryption"]
-    ModEngine["<b>Sandboxed Mod Runtime</b><br/>Isolated ZIP Packages & Community Boards"]
+  subgraph Security ["Verification and Modding Core (src/crypto.ts and src/mods/)"]
+    Crypto["Topological Cryptographic Verifier<br/>SHA-256 / HMAC Graph Hash and CTF Flag Decryption"]
+    ModEngine["Sandboxed Mod Runtime<br/>Isolated ZIP Packages and Community Boards"]
   end
 
-  %% Data Flow & Interconnections
-  Tools -->|User actions & probe telemetry| PcbApp
-  Modals -->|Order checkout & part swaps| PcbApp
+  %% Data Flow and Interconnections
+  Tools -->|User actions and probe telemetry| PcbApp
+  Modals -->|Order checkout and part swaps| PcbApp
   Creator -->|Custom PCB layout netlist| PcbApp
   
-  PcbApp -->|Solve request & state deltas| FastSim
-  PcbApp -->|Transient rails & non-linear devices| SpiceEngine
-  PcbApp -->|Dynamic heat dissipation I²R| Thermal
+  PcbApp -->|Solve request and state deltas| FastSim
+  PcbApp -->|Transient rails and non-linear devices| SpiceEngine
+  PcbApp -->|Dynamic heat dissipation I2R| Thermal
   
-  FastSim -->|Nodal voltages & currents| Tools
-  SpiceEngine -->|Oscilloscope signals & bus ripples| Tools
+  FastSim -->|Nodal voltages and currents| Tools
+  SpiceEngine -->|Oscilloscope signals and bus ripples| Tools
   Thermal -->|IR temperature distribution| WebGPU
   Intermittent -->|Flex open/short transitions| FastSim
 
-  PcbApp -->|Geometry & mesh buffers| WebGPU
-  Camera -->|View matrix & projection| WebGPU
+  PcbApp -->|Geometry and mesh buffers| WebGPU
+  Camera -->|View matrix and projection| WebGPU
 
   PcbApp -->|Topological board graph| Crypto
-  Crypto -->|Unlock challenge flag PCB{...}| PcbApp
+  Crypto -->|Unlock challenge flag PCB CTF| PcbApp
 
   PcbApp -->|Board design data| GerberGen
   PcbApp -->|Component BOM list| BOM

@@ -52,6 +52,9 @@ export class ShortcutsModalController {
               <div class="sc-card">
                 <h4>${isPl ? 'Operacje Warsztatu' : 'Bench Actions'}</h4>
                 <div class="sc-row"><span>${isPl ? 'Zasilanie płyty (Wł/Wył)' : 'Power On / Off'}</span><span class="sc-kbd">P</span></div>
+                <div class="sc-row"><span>${isPl ? 'DMM: Zamroź wynik (Hold)' : 'DMM: Data Hold'}</span><span class="sc-kbd">D</span></div>
+                <div class="sc-row"><span>${isPl ? 'DMM: Zerowanie / Delta (Rel)' : 'DMM: Relative Δ (Null)'}</span><span class="sc-kbd">U</span></div>
+                <div class="sc-row"><span>${isPl ? 'Oscyloskop: Start / Stop' : 'Scope: Run / Stop'}</span><span class="sc-kbd">S</span></div>
                 <div class="sc-row"><span>${isPl ? 'Cofnij ruch' : 'Undo'}</span><span class="sc-kbd">⌘Z / Ctrl+Z</span></div>
                 <div class="sc-row"><span>${isPl ? 'Ponów ruch' : 'Redo'}</span><span class="sc-kbd">⇧⌘Z / Ctrl+Y</span></div>
                 <div class="sc-row"><span>${isPl ? 'Przełącz język (PL/EN)' : 'Toggle Language'}</span><span class="sc-kbd">L</span></div>

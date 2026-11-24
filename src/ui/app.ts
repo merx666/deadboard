@@ -1,48 +1,49 @@
-import type { Board, Component, LedColor, Objective, Scenario, Side, V2 } from '../types';
-import { FAULT_LABELS, applicableFaults, clearFault, injectFault, listFaults, needsSpice, rng, severityHint, type FaultClass } from '../faults';
-import { dist, transform4 } from '../geom';
+import { BOARD_PRESET_METAS, type BoardPresetMeta } from '../boards/presetsMeta';
+import { BootController, type RequiredRail, requiredRails } from '../boot';
 import { buildConnectivity, type Conn } from '../connectivity';
-import { BAND_RGB, GOLD_RGB, KIND_NAMES, LED_COLORS, e12Values, fmtOhm, fmtSI, marking, padWorld, parseValue, resistorBands } from '../model';
-import { addBlob, addJumper, cutTrace, installPart, removeBlob, removeJumper, removePart, toggleCold } from '../ops';
-import { measureDiode, measureOhms, type Sim } from '../sim';
-import { measureDiodeSpice, measureOhmsSpice } from '../spice/adapter';
-import { AMMETER_SHUNT, GENERIC_DMM, contactResistance, displayAmps, displayVolts, measureCapDmm, measureDiodeDmm, measureOhmsDmm, placementRng, type Reading } from '../spice/dmm';
-import { boardToCircuit } from '../spice/board';
-import { writeSpice } from '../spice/netlist';
-import { netAt, pickAt, type PickHit } from '../pick';
-import { runSolver, verifyScenario, type Solver, type VerifyResult } from '../verify';
 import { lockFlag, packText, topology, unpackText } from '../crypto';
+import { type FaultClass, listFaults } from '../faults';
+import { dist, transform4 } from '../geom';
+import { getLang, t as i18n, setLang, translateScenario } from '../i18n';
+import { FlexField, settleIntermittents, updateIntermittents } from '../intermittent';
 import { serializeScenario } from '../io/format';
+import { fmtOhm, fmtSI, marking, padWorld } from '../model';
 import type { ModBoard } from '../mods/mods';
 import { installMod, loadAllMods, type ModLoadResult } from '../mods/sources';
-import { builtinScenarios } from '../scenarios/builtin';
-import { Builder } from '../scenarios/builder';
+import { addBlob, addJumper, cutTrace, installPart, removeBlob, removeJumper, removePart, toggleCold } from '../ops';
+import { netAt, type PickHit, pickAt } from '../pick';
 import { BOTH_GAP, Camera } from '../render/camera';
-import { EMISSIVITY, ThermalModel, apparentTemp } from '../thermal';
-import { FlexField, settleIntermittents, updateIntermittents } from '../intermittent';
-import { BootController, requiredRails, type RequiredRail } from '../boot';
+import { type VizMode, WebGPURenderer } from '../render/webgpu';
 import { cleanWithIpa, residueNear } from '../residue';
-import { discoverPowerTree, railVoltage, type PowerTree } from '../spice/powertree';
-import { fmtHz, sampleSignal, signalOn, type ScopeSignal } from '../scope';
+import { HOTAIR_H, IRON_G, PREHEAT_H, type ReworkEvent, ReworkMonitor } from '../rework';
+import { Builder } from '../scenarios/builder';
+import { builtinScenarios } from '../scenarios/builtin';
+import { fmtHz, type ScopeSignal, sampleSignal, signalOn } from '../scope';
+import { measureDiode, measureOhms, type Sim } from '../sim';
+import { measureDiodeSpice, measureOhmsSpice } from '../spice/adapter';
+import { boardToCircuit } from '../spice/board';
+import { AMMETER_SHUNT, contactResistance, displayAmps, displayVolts, GENERIC_DMM, measureCapDmm, measureDiodeDmm, measureOhmsDmm, placementRng, type Reading } from '../spice/dmm';
+import { writeSpice } from '../spice/netlist';
+import { discoverPowerTree, type PowerTree, railVoltage } from '../spice/powertree';
 import type { PowerStateName } from '../spice/sequencer';
-import { HOTAIR_H, IRON_G, PREHEAT_H, ReworkMonitor, type ReworkEvent } from '../rework';
-import { WebGPURenderer, type VizMode } from '../render/webgpu';
-import { setSoundEnabled, sfxBeep, sfxBlow, sfxClick, sfxCut, sfxSolder, sfxWin, soundEnabled, setContinuityBeep, sfxRelay, sfxProbe } from './audio';
+import { apparentTemp, EMISSIVITY, ThermalModel } from '../thermal';
+import type { Board, Component, Objective, Scenario, Side, V2 } from '../types';
+import { runSolver, type Solver, type VerifyResult, verifyScenario } from '../verify';
+import { setContinuityBeep, setSoundEnabled, sfxBeep, sfxBlow, sfxClick, sfxCut, sfxProbe, sfxRelay, sfxSolder, sfxWin, soundEnabled } from './audio';
+import { type FeedbackContext, mountFeedbackForm } from './feedback';
 import { icon } from './icons';
-import { mountFeedbackForm, type FeedbackContext } from './feedback';
 import { BRAND, markSvg } from './logo';
-import { TUTORIAL_SCENARIO_IDS, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
-import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsMobileLayout } from './touch';
-import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
-import { BOARD_PRESET_METAS, type BoardPresetMeta } from '../boards/presetsMeta';
+import { BoardsModalController } from './modals/boardsModal';
+import { FeedbackModalController } from './modals/feedbackModal';
+import { HelpModalController } from './modals/helpModal';
+import { ModsModalController } from './modals/modsModal';
 import { OrderModalController } from './modals/orderModal';
 import { PartsBinModalController } from './modals/partsBinModal';
-import { ShortcutsModalController } from './modals/shortcutsModal';
 import { ReportModalController } from './modals/reportModal';
-import { HelpModalController } from './modals/helpModal';
-import { BoardsModalController } from './modals/boardsModal';
-import { ModsModalController } from './modals/modsModal';
-import { FeedbackModalController } from './modals/feedbackModal';
+import { ShortcutsModalController } from './modals/shortcutsModal';
+import { InspectPanelController } from './panels/inspectPanel';
+import { splitLead, TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, touchCopy, wantsMobileLayout } from './touch';
+import { getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, TUTORIAL_SCENARIO_IDS, type TutorialStep } from './tutorial';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
 type PanelTab = 'mission' | 'inspect' | 'studio';
@@ -160,6 +161,7 @@ export class PcbApp {
   private scopeProbe: ProbePin | null = null;
   private scopeRoll: { t: number; v: number }[] = [];
   private scopeMode: 'auto' | 'roll' = 'auto';
+  private scopePaused = false;
   private scopeSample = 0;
   /** Parts under a rosin coat (rosin method), checked for melting / smoke. */
   private rosinParts = new Set<Component>();
@@ -170,6 +172,11 @@ export class PcbApp {
   private intermittentClock = 0;
   private vizMode: VizMode = 'realistic';
   private dmmMode: DmmMode = 'V';
+  private dmmHold = false;
+  private dmmHoldVal: { reading: string; sub: string } | null = null;
+  private dmmRel = false;
+  private dmmRelOffset: number | null = null;
+  private currentDmmNumericVal: number | null = null;
   private diodeLitIds: string[] = [];
   private hintsShown = 0;
 
@@ -202,6 +209,7 @@ export class PcbApp {
   private modsModal: ModsModalController | null = null;
   private showPartsBin = false;
   private partsBinModal: PartsBinModalController | null = null;
+  private inspectPanel: InspectPanelController | null = null;
   /** Ids of the boards that ship with LiveBoard (built-ins + demos): an author's copy needs its own id. */
   private bundledIds = new Set<string>();
   /** Mod boards in the list (stub before first open, full scenario after) → their mod. */
@@ -1363,6 +1371,7 @@ export class PcbApp {
             <span>Oscilloscope · CH1</span>
             <div class="row">
               <div class="seg"><button id="sc-auto">Auto</button><button id="sc-roll">Roll</button></div>
+              <div class="seg"><button class="${this.scopePaused ? 'on warn' : ''}" id="sc-pause" title="Run / Stop (Freeze waveform - S)">${this.scopePaused ? 'STOP' : 'RUN'}</button></div>
               <button class="btn ghost icon" id="sc-close" title="Remove probe">${icon('x', 14)}</button>
             </div>
           </div>
@@ -1372,10 +1381,21 @@ export class PcbApp {
         </div>`;
       this.scopeBoxEl.querySelector('#sc-auto')!.addEventListener('click', () => { this.scopeMode = 'auto'; this.renderScope(); });
       this.scopeBoxEl.querySelector('#sc-roll')!.addEventListener('click', () => { this.scopeMode = 'roll'; this.renderScope(); });
+      this.scopeBoxEl.querySelector('#sc-pause')!.addEventListener('click', () => {
+        this.scopePaused = !this.scopePaused;
+        sfxClick();
+        this.renderScope();
+      });
       this.scopeBoxEl.querySelector('#sc-close')!.addEventListener('click', () => { this.scopeProbe = null; this.renderScope(); });
     }
     this.scopeBoxEl.querySelector('#sc-auto')!.classList.toggle('on', this.scopeMode === 'auto');
     this.scopeBoxEl.querySelector('#sc-roll')!.classList.toggle('on', this.scopeMode === 'roll');
+    const pauseBtn = this.scopeBoxEl.querySelector('#sc-pause');
+    if (pauseBtn) {
+      pauseBtn.classList.toggle('warn', this.scopePaused);
+      pauseBtn.classList.toggle('on', this.scopePaused);
+      pauseBtn.textContent = this.scopePaused ? 'STOP' : 'RUN';
+    }
     const cv = this.scopeBoxEl.querySelector<HTMLCanvasElement>('#sc-canvas')!;
     const ctx = cv.getContext('2d');
     if (!ctx) return;
@@ -1438,6 +1458,11 @@ export class PcbApp {
     ctx.font = '18px ui-monospace, monospace';
     ctx.fillText(`${vdiv >= 1 ? `${vdiv} V` : `${vdiv * 1000} mV`}/div`, 8, 22);
     ctx.fillText(`${mid.toFixed(3)} V`, W - 110, 22);
+    if (this.scopePaused) {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 13px ui-monospace, monospace';
+      ctx.fillText('STOP', W - 175, 22);
+    }
   }
 
   /** Current vs time, last 10 s; the y range follows the data (auto-ranging like a scope). */
@@ -2164,6 +2189,23 @@ export class PcbApp {
     }
     if (k === 'c') { this.camera.fitBoard(this.board.w, this.board.h); return; }
     if (k === 'p') { this.togglePower(); return; }
+    if (k === 'd') {
+      this.toggleDmmHold();
+      return;
+    }
+    if (k === 'u') {
+      this.toggleDmmRel(this.currentDmmNumericVal);
+      return;
+    }
+    if (k === 's') {
+      if (this.scopeProbe) {
+        this.scopePaused = !this.scopePaused;
+        sfxClick();
+        this.toast(this.scopePaused ? 'Oscilloscope STOP (waveform frozen)' : 'Oscilloscope RUN (live capture)', 'info');
+        this.renderScope();
+      }
+      return;
+    }
     if (e.key === 'Tab') {
       e.preventDefault();
       const nextMode = this.camera.mode === '2d' ? '3d' : '2d';
@@ -2639,11 +2681,13 @@ export class PcbApp {
     }
     let reading = '— . —';
     let sub = 'Place Red (+) and Black (−) probes';
+    let numVal: number | null = null;
 
     if (this.dmmMode === 'V') {
       if (!this.powerOn) {
         reading = '0.000 V';
         sub = 'Supply off — enable power to measure DC voltage';
+        numVal = 0;
       } else if (this.probeRed && this.probeRed.net >= 0 && this.sim?.source) {
         const niA = this.sim.nodeOfNet.get(this.probeRed.net);
         const va = niA !== undefined ? this.sim.V[niA] : null;
@@ -2657,6 +2701,7 @@ export class PcbApp {
         }
         if (va !== null && vb !== null) {
           const dv = va - vb;
+          numVal = dv;
           if (this.solver !== 'fast') {
             const pr = this.probeRed.pos, pb = this.probeBlack?.pos;
             const d = displayVolts(dv, undefined, placementRng('V', pr[0].toFixed(1), pr[1].toFixed(1), pb?.[0].toFixed(1) ?? '', pb?.[1].toFixed(1) ?? ''));
@@ -2675,6 +2720,7 @@ export class PcbApp {
       } else if (this.probeRed && this.probeBlack) {
         const rd = this.meter('CAP', this.probeRed.net, this.probeBlack.net);
         reading = rd.text;
+        numVal = rd.value ?? null;
         sub = rd.sub ?? (rd.value !== null ? `Capacitance across the probes${this.capValuesGuessed() ? ' (board data has no cap values: placeholder values)' : ''}` : '');
       } else {
         reading = '0.000 nF';
@@ -2687,6 +2733,7 @@ export class PcbApp {
       } else if (this.probeRed && this.probeBlack && this.probeRed.net >= 0 && this.probeBlack.net >= 0) {
         const rd = this.ammeterReading(this.probeRed.net, this.probeBlack.net);
         reading = rd.text;
+        numVal = rd.value ?? null;
         sub = rd.sub ?? (this.probeRed.net === this.probeBlack.net ? 'Probes on one net: the copper carries the current, not the meter' : 'Meter in series (10 A input): lift a fuse / link and probe its pads to read the branch current');
       } else {
         reading = '0.0 mA';
@@ -2703,6 +2750,7 @@ export class PcbApp {
         } else {
           const rd = this.solver !== 'fast' ? this.meter('OHM', this.probeRed.net, this.probeBlack.net) : null;
           const r = rd ? rd.value ?? Infinity : this.ohms(this.probeRed.net, this.probeBlack.net);
+          numVal = Number.isFinite(r) ? r : null;
           if (rd) {
             reading = rd.text;
             sub = rd.value === null ? (rd.sub ?? 'Open circuit (OL)') : rd.beep ? `Continuity beep (< 30 Ω) · ${rd.range} range` : `In-circuit resistance · ${rd.range} range`;
@@ -2728,6 +2776,7 @@ export class PcbApp {
           const res = this.diodeTest(this.probeRed.net, this.probeBlack.net);
           this.diodeLitIds = res.litIds;
           const dd = this.solver !== 'fast' ? this.meter('DIODE', this.probeRed.net, this.probeBlack.net) : null;
+          numVal = Number.isFinite(res.volts) ? res.volts : null;
           if (dd) {
             reading = dd.text;
             sub = dd.value === null ? 'Open or reverse-biased (OL)' : dd.value < 0.05 ? 'Shorted junction' : dd.value < 0.3 ? 'Low drop: Schottky / partial short' : 'Forward junction drop (ESD / body diode / PN)';
@@ -2745,6 +2794,32 @@ export class PcbApp {
       }
     }
 
+    this.currentDmmNumericVal = numVal;
+
+    if (this.dmmRel && this.dmmRelOffset !== null && numVal !== null) {
+      const delta = numVal - this.dmmRelOffset;
+      if (this.dmmMode === 'V' || this.dmmMode === 'DIODE') {
+        reading = `${delta >= 0 ? '+' : ''}${delta.toFixed(3)} V`;
+      } else if (this.dmmMode === 'OHM') {
+        reading = Math.abs(delta) < 0.05 ? '0.0 Ω' : fmtOhm(Math.abs(delta));
+      } else if (this.dmmMode === 'CAP') {
+        reading = fmtSI(Math.max(0, delta), 'F');
+      } else if (this.dmmMode === 'AMP') {
+        reading = `${(delta * 1000).toFixed(1)} mA`;
+      }
+      sub = `Δ Rel (${this.dmmRelOffset.toFixed(3)} ref) · ${sub}`;
+    }
+
+    if (this.dmmHold) {
+      if (!this.dmmHoldVal) {
+        this.dmmHoldVal = { reading, sub };
+      }
+      reading = this.dmmHoldVal.reading;
+      sub = this.dmmHoldVal.sub;
+    } else {
+      this.dmmHoldVal = null;
+    }
+
     this.dmmBoxEl.innerHTML = `
       <div class="dmm-card${this.mobile && this.dmmSubFull ? ' full' : ''}" style="transform: translate3d(${this.dmmPos[0]}px, ${this.dmmPos[1]}px, 0)">
         <div class="dmm-head" title="Drag to move window">
@@ -2757,10 +2832,19 @@ export class PcbApp {
               <button class="${this.dmmMode === 'CAP' ? 'on' : ''}" id="dmm-cap" title="Capacitance (power off)">F</button>
               <button class="${this.dmmMode === 'AMP' ? 'on' : ''}" id="dmm-amp" title="Current, 10 A input (meter in series)">A</button>
             </div>
+            <div class="seg">
+              <button class="${this.dmmHold ? 'on' : ''}" id="dmm-hold" title="Hold reading (D)">HOLD</button>
+              <button class="${this.dmmRel ? 'on' : ''}" id="dmm-rel" title="Relative zero offset (U)">REL Δ</button>
+            </div>
             <button class="btn ghost icon" id="dmm-clr" title="Clear probes">${icon('x', 14)}</button>
           </div>
         </div>
         <div class="dmm-lcd">
+          ${(this.dmmHold || this.dmmRel) ? `
+          <div class="dmm-annunciators">
+            ${this.dmmHold ? '<span class="dmm-badge hold">HOLD</span>' : ''}
+            ${this.dmmRel ? '<span class="dmm-badge rel">Δ REL</span>' : ''}
+          </div>` : ''}
           <div class="dmm-val">${this.esc(reading)}</div>
           <div class="dmm-sub">${this.esc(sub)}</div>
         </div>
@@ -2778,23 +2862,45 @@ export class PcbApp {
 
     this.dmmBoxEl.querySelector('#dmm-v')!.addEventListener('click', () => {
       this.dmmMode = 'V';
+      this.dmmHold = false;
+      this.dmmHoldVal = null;
+      this.dmmRel = false;
+      this.dmmRelOffset = null;
       this.renderDmm();
       this.renderTutorial();
     });
     this.dmmBoxEl.querySelector('#dmm-ohm')!.addEventListener('click', () => {
       this.dmmMode = 'OHM';
+      this.dmmHold = false;
+      this.dmmHoldVal = null;
+      this.dmmRel = false;
+      this.dmmRelOffset = null;
       this.checkContinuityBeep();
       this.renderDmm();
       this.renderTutorial();
     });
     this.dmmBoxEl.querySelector('#dmm-diode')!.addEventListener('click', () => {
       this.dmmMode = 'DIODE';
+      this.dmmHold = false;
+      this.dmmHoldVal = null;
+      this.dmmRel = false;
+      this.dmmRelOffset = null;
       this.renderDmm();
       this.renderTutorial();
     });
     for (const [id, mode] of [['#dmm-cap', 'CAP'], ['#dmm-amp', 'AMP']] as const) {
-      this.dmmBoxEl.querySelector(id)!.addEventListener('click', () => { this.dmmMode = mode; this.renderDmm(); this.renderTutorial(); });
+      this.dmmBoxEl.querySelector(id)!.addEventListener('click', () => {
+        this.dmmMode = mode;
+        this.dmmHold = false;
+        this.dmmHoldVal = null;
+        this.dmmRel = false;
+        this.dmmRelOffset = null;
+        this.renderDmm();
+        this.renderTutorial();
+      });
     }
+    this.dmmBoxEl.querySelector('#dmm-hold')?.addEventListener('click', () => this.toggleDmmHold());
+    this.dmmBoxEl.querySelector('#dmm-rel')?.addEventListener('click', () => this.toggleDmmRel(numVal));
     if (this.mobile) this.dmmBoxEl.querySelector('.dmm-lcd')?.addEventListener('click', () => { this.dmmSubFull = !this.dmmSubFull; this.renderDmm(); });
     for (const [id, which] of [['#probe-red', 'red'], ['#probe-blk', 'black']] as const) {
       this.dmmBoxEl.querySelector(id)?.addEventListener('click', () => {
@@ -2808,9 +2914,37 @@ export class PcbApp {
       this.probeBlack = null;
       this.activeProbe = 'red';
       this.activeProbeAuto = false;
+      this.dmmHold = false;
+      this.dmmHoldVal = null;
       this.renderDmm();
       this.renderTutorial();
     });
+  }
+
+  private toggleDmmHold() {
+    this.dmmHold = !this.dmmHold;
+    if (!this.dmmHold) this.dmmHoldVal = null;
+    sfxClick();
+    this.toast(this.dmmHold ? 'DMM Data Hold (zamrożono odczyt)' : 'DMM Data Hold released', 'info');
+    this.renderDmm();
+  }
+
+  private toggleDmmRel(val?: number | null) {
+    if (this.dmmRel) {
+      this.dmmRel = false;
+      this.dmmRelOffset = null;
+      this.toast('DMM Relative offset wyzerowany', 'info');
+    } else if (val !== null && val !== undefined && Number.isFinite(val)) {
+      this.dmmRel = true;
+      this.dmmRelOffset = val;
+      const refStr = this.dmmMode === 'OHM' ? fmtOhm(val) : val.toFixed(3);
+      this.toast(`DMM Relative reference: ${refStr} (Null/Zero)`, 'info');
+    } else {
+      this.toast('Przyłóż sondy, aby ustalić punkt zerowy (Rel)', 'info');
+      return;
+    }
+    sfxClick();
+    this.renderDmm();
   }
 
   private renderUI() {
@@ -3184,403 +3318,45 @@ export class PcbApp {
     });
   }
 
-  private renderInspectTab() {
-    const c = this.board.components.find((x) => x.id === this.selectedCompId) ?? null;
+  private getInspectPanel(): InspectPanelController {
+    if (!this.inspectPanel) {
+      this.inspectPanel = new InspectPanelController({
+        getBoard: () => this.board,
+        getConn: () => this.conn,
+        getSim: () => this.sim,
+        isPowerOn: () => this.powerOn,
+        getSelectedCompId: () => this.selectedCompId,
+        getSelectedNet: () => this.selectedNet,
+        getCompSearch: () => this.compSearch,
+        isAuthorMode: () => this.authorMode,
+        getFaultClass: () => this.faultClass,
+        getSolver: () => this.solver,
+        getCamera: () => this.camera,
+        getSideBodyEl: () => this.sideBodyEl,
 
-    if (!c) {
-      const netName = this.selectedNet >= 0 ? this.conn.netNames[this.selectedNet] : null;
-      const ni = this.selectedNet >= 0 ? this.sim?.nodeOfNet.get(this.selectedNet) : undefined;
-      const v = ni !== undefined && this.sim?.source ? this.sim.V[ni] : null;
-      const renderCompRows = () => {
-        const q = this.compSearch.trim().toLowerCase();
-        const filtered = q
-          ? this.board.components.filter((comp) =>
-              comp.ref.toLowerCase().includes(q)
-              || KIND_NAMES[comp.kind].toLowerCase().includes(q)
-              || (comp.label?.toLowerCase().includes(q) ?? false))
-          : this.board.components;
-        const shown = filtered.slice(0, 120);
-        const rows = shown.map((comp) => `
-          <button class="list-btn" data-pick-comp="${comp.id}">
-            <span><b>${this.esc(comp.ref)}</b> · ${this.esc(KIND_NAMES[comp.kind])}</span>
-            <span class="sub">${this.esc(marking(comp))}</span>
-          </button>
-        `).join('');
-        const tail = filtered.length > 120
-          ? `<div class="muted" style="padding-top:4px">Showing 120 of ${filtered.length} matches — refine search above</div>`
-          : '';
-        return (rows || `<div class="muted">No matching components.</div>`) + tail;
-      };
-      this.sideBodyEl.innerHTML = `
-        <div class="card">
-          <div class="card-title">Selection</div>
-          ${netName ? `
-            <dl class="kv">
-              <dt>Net</dt><dd>${this.esc(netName)}</dd>
-              <dt>Potential</dt><dd>${v !== null ? `${v.toFixed(3)} V` : this.powerOn ? 'Floating' : 'Unpowered'}</dd>
-            </dl>
-          ` : `<div class="muted">Select a component, pad, or trace in the viewport to inspect parameters and perform rework.</div>`}
-        </div>
-        <div class="card">
-          <div class="card-title">Components (${this.board.components.length})</div>
-          <input type="text" id="inp-comp-search" placeholder="Search ref or type (e.g. U2, C29, resistor)…" value="${this.esc(this.compSearch)}" style="width:100%;margin-bottom:8px" />
-          <div class="stack" id="comp-list-box">${renderCompRows()}</div>
-        </div>
-      `;
-      const bindCompClicks = () => {
-        this.sideBodyEl.querySelectorAll<HTMLButtonElement>('[data-pick-comp]').forEach((b) => {
-          b.addEventListener('click', () => {
-            const id = b.dataset.pickComp!;
-            this.selectedCompId = id;
-            if (this.board.components.length > 100) {
-              const picked = this.board.components.find((x) => x.id === id);
-              if (picked) {
-                if (this.camera.bothSides) {
-                  const fx = picked.side === 'B' ? this.board.w * 2 + BOTH_GAP - picked.at[0] : picked.at[0];
-                  this.camera.focusAt(fx, picked.at[1], 10);
-                } else {
-                  this.camera.focusAt(picked.at[0], picked.at[1], 10, picked.side);
-                }
-                this.renderUI();
-                return;
-              }
-            }
-            this.renderInspectTab();
-          });
-        });
-      };
-      bindCompClicks();
-      const searchEl = this.sideBodyEl.querySelector<HTMLInputElement>('#inp-comp-search');
-      const listBox = this.sideBodyEl.querySelector<HTMLElement>('#comp-list-box');
-      searchEl?.addEventListener('input', () => {
-        this.compSearch = searchEl.value;
-        if (listBox) {
-          listBox.innerHTML = renderCompRows();
-          bindCompClicks();
-        }
+        esc: (s) => this.esc(s),
+        toast: (msg, kind) => this.toast(msg, kind),
+        pushUndo: () => this.pushUndo(),
+        recompute: (full) => this.recompute(full),
+        renderUI: () => this.renderUI(),
+        openPartsBin: (c) => this.openPartsBin(c),
+        environment: () => this.environment(),
+        setSelectedCompId: (id) => {
+          this.selectedCompId = id;
+        },
+        setCompSearch: (q) => {
+          this.compSearch = q;
+        },
+        setFaultClass: (cls) => {
+          this.faultClass = cls;
+        },
       });
-      return;
     }
-
-    const isPl = getLang() === 'pl';
-    const cSim = this.powerOn && this.sim ? this.sim.comps.get(c.id) : undefined;
-    const bands = c.kind === 'resistor' && c.state.populated && !c.state.burnt ? resistorBands(c.value) : null;
-    const bandColorCss = (idx: number) => {
-      const rgb = idx < 0 ? GOLD_RGB : BAND_RGB[idx];
-      return `rgb(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)})`;
-    };
-
-    const e12 = e12Values(10, 1000000);
-
-    this.sideBodyEl.innerHTML = `
-      <div class="card">
-        <div class="card-title">
-          <button class="btn ghost sm" id="btn-comp-back" style="padding:0 4px">${icon('chevronLeft', 14)}<span>Components</span></button>
-          <span class="badge info">${this.esc(c.ref)}</span>
-        </div>
-        <div class="card-title lg">${this.esc(KIND_NAMES[c.kind])}</div>
-        <dl class="kv">
-          <dt>State</dt><dd>${!c.state.populated ? 'Unpopulated' : c.state.burnt ? 'Damaged (open)' : 'Populated'}${c.state.reversed ? ' · Reversed' : ''}${c.state.cold.length ? ` · ${c.state.cold.length} cold joint` : ''}</dd>
-          <dt>Value</dt><dd>${this.esc(marking(c))}</dd>
-          ${bands ? `
-            <dt>Color code</dt>
-            <dd>
-              <span class="res-bands">
-                <span class="res-band" style="background:${bandColorCss(bands[0])}"></span>
-                <span class="res-band" style="background:${bandColorCss(bands[1])}"></span>
-                <span class="res-band" style="background:${bandColorCss(bands[2])}"></span>
-                <span class="res-band" style="background:${bandColorCss(-1)}"></span>
-              </span>
-            </dd>
-          ` : ''}
-          ${cSim ? `
-            <dt>Drop / current</dt><dd>${cSim.v.toFixed(3)} V · ${(cSim.i * 1000).toFixed(2)} mA</dd>
-            <dt>Power / temp</dt><dd>${(cSim.p * 1000).toFixed(1)} mW · ${(25 + cSim.p * (c.kind === 'resistor' ? 185 : 130)).toFixed(0)} °C</dd>
-          ` : ''}
-        </dl>
-        <div class="callout">
-          <span class="h">Reference note</span>
-          <span>${this.esc(
-            c.kind === 'resistor'
-              ? 'Read the 4 bands left-to-right toward the gold tolerance band: Digit 1, Digit 2, Multiplier (10^n). Example: Brown-Black-Red = 1-0 × 10² = 1 kΩ.'
-              : c.kind === 'led'
-                ? 'Look for the flat notch on the rim and the larger internal cathode anvil flag. Verify polarity in Diode mode (•◄|).'
-                : c.kind === 'diode'
-                  ? 'The silver/white band marks the Cathode (K). A healthy silicon diode drops ~0.6–0.7 V forward and reads OL reversed.'
-                  : c.kind === 'switch'
-                    ? '4-pin tactile switches pair two legs internally on each side (1-1 and 2-2). Pressing bridges side 1 to side 2.'
-                    : c.kind === 'fuse'
-                      ? 'Check for downstream shorts (Ω mode or 100 mA limit + Thermal view) before replacing a blown fuse.'
-                      : 'Probe pads in V DC (Power ON) or Ω / Diode mode (Power OFF) to trace connectivity.'
-          )}</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">${isPl ? 'Prace serwisowe' : 'Rework'}</div>
-        <div class="row wrap">
-          ${c.kind === 'switch' ? `<button class="btn sm primary" id="act-toggle-sw">${c.state.closed ? (isPl ? 'Zwolnij przełącznik' : 'Release switch') : (isPl ? 'Naciśnij przełącznik' : 'Press switch')}</button>` : ''}
-          ${c.state.populated ? `<button class="btn sm" id="act-flip180">${isPl ? 'Obróć o 180°' : 'Rotate 180°'}</button>` : ''}
-          ${c.state.cold.length ? `<button class="btn sm warn" id="act-reflow">${isPl ? 'Przetop luty' : 'Reflow joints'}</button>` : ''}
-          ${c.state.populated ? `<button class="btn sm" id="act-desolder">${isPl ? 'Wylutuj element' : 'Remove part'}</button>` : ''}
-          ${!c.state.populated || c.state.burnt ? `<button class="btn sm primary" id="act-fit">${isPl ? `Wlutuj nowy ${this.esc(KIND_NAMES[c.kind].toLowerCase())}` : `Fit new ${this.esc(KIND_NAMES[c.kind].toLowerCase())}`}</button>` : ''}
-          <button class="btn sm" id="act-open-catalog" style="background:var(--accent-weak); border-color:var(--accent-line); color:var(--accent); font-weight:600;" title="${isPl ? 'Wybierz podzespół z bazy PCBWay / LCSC' : 'Pick from PCBWay / LCSC catalog'}">
-            ${icon('box', 13)}
-            <span>${isPl ? 'Wybierz z bazy PCBWay / LCSC' : 'Pick from Supplier Catalog'}</span>
-          </button>
-        </div>
-
-        ${c.kind === 'resistor' ? `
-          <div class="field">
-            <label>Resistance (e.g. 100, 330, 4k7, 10k)</label>
-            <div class="row">
-              <input type="text" class="grow" id="inp-res-val" value="${c.value || 330}" />
-              <button class="btn sm primary" id="act-install-res">Apply</button>
-            </div>
-            <select id="sel-e12" style="margin-top:2px">
-              <option value="">Standard E12 value…</option>
-              ${e12.map((v) => `<option value="${v}" ${Math.abs(v - c.value) < 0.01 ? 'selected' : ''}>${fmtOhm(v)}</option>`).join('')}
-            </select>
-          </div>
-        ` : ''}
-
-        ${c.kind === 'led' ? `
-          <div class="field">
-            <label>LED emission color</label>
-            <div class="row">
-              <select class="grow" id="sel-led-col">
-                ${LED_COLORS.map((col) => `<option value="${col}" ${c.color === col ? 'selected' : ''}>${col.toUpperCase()}</option>`).join('')}
-              </select>
-              <button class="btn sm primary" id="act-install-led">Apply</button>
-            </div>
-          </div>
-        ` : ''}
-
-        ${c.kind === 'fuse' ? `
-          <div class="field">
-            <label>Fuse current rating (A)</label>
-            <div class="row">
-              <input type="number" class="grow" step="0.1" min="0.05" id="inp-fuse-val" value="${c.value || 0.5}" />
-              <button class="btn sm primary" id="act-install-fuse">Apply</button>
-            </div>
-          </div>
-        ` : ''}
-
-        ${c.kind === 'capacitor' ? `
-          <div class="field">
-            <label>Capacitance (e.g. 100n, 10u)</label>
-            <div class="row">
-              <input type="text" class="grow" id="inp-cap-val" value="${c.value ? fmtSI(c.value, 'F') : '100n'}" />
-              <button class="btn sm primary" id="act-install-cap">Apply</button>
-            </div>
-          </div>
-        ` : ''}
-      </div>
-
-      ${this.authorMode ? this.faultCardHtml(c) : ''}
-    `;
-
-    this.sideBodyEl.querySelector('#btn-comp-back')?.addEventListener('click', () => {
-      this.selectedCompId = null;
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-toggle-sw')?.addEventListener('click', () => {
-      c.state.closed = !c.state.closed;
-      sfxClick();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-flip180')?.addEventListener('click', () => {
-      this.pushUndo();
-      c.state.reversed = !c.state.reversed;
-      sfxClick();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-reflow')?.addEventListener('click', () => {
-      this.pushUndo();
-      c.state.cold = [];
-      sfxSolder();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-fit')?.addEventListener('click', () => {
-      // a fresh part of the same type and value (value fields below change it)
-      this.pushUndo();
-      installPart(c, { ...(c.value > 0 && { value: c.value }) });
-      sfxSolder();
-      this.recompute(false);
-      this.toast(`Fitted a new ${c.ref}`, 'success');
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-desolder')?.addEventListener('click', () => {
-      this.pushUndo();
-      removePart(c);
-      sfxSolder();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-open-catalog')?.addEventListener('click', () => {
-      this.openPartsBin(c);
-    });
-    this.sideBodyEl.querySelector('#sel-e12')?.addEventListener('change', (e) => {
-      const v = Number((e.target as HTMLSelectElement).value);
-      if (v > 0) {
-        this.pushUndo();
-        installPart(c, { value: v, reversed: c.state.reversed });
-        sfxSolder();
-        this.recompute(false);
-        this.renderInspectTab();
-      }
-    });
-    this.sideBodyEl.querySelector('#act-install-res')?.addEventListener('click', () => {
-      const raw = (this.sideBodyEl.querySelector('#inp-res-val') as HTMLInputElement).value;
-      const v = parseValue(raw);
-      if (!Number.isFinite(v) || v <= 0) { this.toast('Invalid resistor value', 'danger'); return; }
-      this.pushUndo();
-      installPart(c, { value: v, reversed: c.state.reversed });
-      sfxSolder();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-install-led')?.addEventListener('click', () => {
-      const col = (this.sideBodyEl.querySelector('#sel-led-col') as HTMLSelectElement).value as LedColor;
-      this.pushUndo();
-      installPart(c, { color: col, reversed: c.state.reversed });
-      sfxSolder();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-install-fuse')?.addEventListener('click', () => {
-      const v = Number((this.sideBodyEl.querySelector('#inp-fuse-val') as HTMLInputElement).value);
-      if (!Number.isFinite(v) || v <= 0) { this.toast('Invalid fuse rating', 'danger'); return; }
-      this.pushUndo();
-      installPart(c, { value: v });
-      sfxSolder();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#act-install-cap')?.addEventListener('click', () => {
-      const raw = (this.sideBodyEl.querySelector('#inp-cap-val') as HTMLInputElement).value;
-      const v = parseValue(raw);
-      if (!Number.isFinite(v) || v <= 0) { this.toast('Invalid capacitance', 'danger'); return; }
-      this.pushUndo();
-      installPart(c, { value: v });
-      sfxSolder();
-      this.recompute(false);
-      this.renderInspectTab();
-    });
-
-    this.sideBodyEl.querySelector('#sab-burn')?.addEventListener('click', () => {
-      this.pushUndo();
-      c.state.burnt = !c.state.burnt;
-      this.recompute(true);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#sab-cold')?.addEventListener('click', () => {
-      this.pushUndo();
-      toggleCold(c, 0);
-      this.recompute(true);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelector('#sab-rev')?.addEventListener('click', () => {
-      this.pushUndo();
-      c.state.reversed = !c.state.reversed;
-      this.recompute(true);
-      this.renderInspectTab();
-    });
-    if (this.authorMode) this.bindFaultCard(c);
+    return this.inspectPanel;
   }
 
-  /** Author-mode fault injection for one part: every fault class that fits it, with severity. */
-  private faultCardHtml(c: Component): string {
-    const classes = applicableFaults(c);
-    const cls = classes.includes(this.faultClass) ? this.faultClass : classes[0];
-    const hint = cls ? severityHint(cls) : null;
-    const jointFault = cls === 'cold-joint' || cls === 'thermal-open-joint' || cls === 'flex-open-joint' || cls === 'flex-close-joint' || cls === 'net-break';
-    const faults = listFaults(c);
-    const fastBlind = this.solver === 'fast' && (faults.some((f) => f.spiceOnly) || (cls && needsSpice(cls)));
-    return `
-      <div class="card">
-        <div class="card-title">Fault injection · ${this.esc(c.ref)}</div>
-        <div class="row wrap">
-          <button class="btn sm warn" id="sab-burn">Toggle damage</button>
-          <button class="btn sm warn" id="sab-cold">Toggle open joint</button>
-          <button class="btn sm warn" id="sab-rev">Reverse 180°</button>
-        </div>
-        ${cls ? `
-          <div class="field">
-            <label>Fault class</label>
-            <select id="sab-class">
-              ${classes.map((k) => `<option value="${k}" ${k === cls ? 'selected' : ''}>${this.esc(FAULT_LABELS[k])}</option>`).join('')}
-            </select>
-          </div>
-          <div class="grid-2">
-            ${jointFault ? `
-              <div class="field">
-                <label>Pad</label>
-                <select id="sab-pad">
-                  <option value="">Random</option>
-                  ${c.pads.map((p, i) => `<option value="${i}">${this.esc(p.name)}${p.net ? ` · ${this.esc(p.net)}` : ''}</option>`).join('')}
-                </select>
-              </div>
-            ` : ''}
-            ${hint ? `
-              <div class="field">
-                <label>${this.esc(hint.what)} (${this.esc(hint.unit)})</label>
-                <input type="text" id="sab-sev" placeholder="random ${hint.unit === 'Ω' ? `${fmtSI(hint.min, 'Ω')} – ${fmtSI(hint.max, 'Ω')}` : `${hint.min}–${hint.max}`}" />
-              </div>
-            ` : ''}
-          </div>
-          <button class="btn sm warn block" id="sab-inject">Inject fault</button>
-        ` : ''}
-        ${faults.length ? `
-          <div class="card-title" style="margin-top:6px">Faults on ${this.esc(c.ref)} (${faults.length})</div>
-          ${faults.map((f) => `
-            <div class="obj-row">
-              <span class="mono">${this.esc(f.label)}${f.spiceOnly ? ' <span class="muted">· SPICE</span>' : ''}</span>
-              <button class="btn ghost icon sm" data-clear-fault="${f.key}" title="Remove fault">${icon('x', 12)}</button>
-            </div>
-          `).join('')}
-        ` : ''}
-        ${fastBlind ? `<div class="callout"><span class="h">Fast DC solver</span><span>Leaks, drift and resistive joints only exist in SPICE (Fast DC treats a resistive joint as open). Switch Bench → Solver to SPICE to see their effect.</span></div>` : ''}
-      </div>
-    `;
-  }
-
-  private bindFaultCard(c: Component) {
-    const q = <T extends HTMLElement>(s: string) => this.sideBodyEl.querySelector<T>(s);
-    q<HTMLSelectElement>('#sab-class')?.addEventListener('change', (e) => {
-      this.faultClass = (e.target as HTMLSelectElement).value as FaultClass;
-      this.renderInspectTab();
-    });
-    q('#sab-inject')?.addEventListener('click', () => {
-      const cls = (q<HTMLSelectElement>('#sab-class')?.value ?? '') as FaultClass;
-      if (!applicableFaults(c).includes(cls)) return;
-      const padRaw = q<HTMLSelectElement>('#sab-pad')?.value ?? '';
-      const sevRaw = (q<HTMLInputElement>('#sab-sev')?.value ?? '').trim();
-      let severity: number | undefined;
-      if (sevRaw) {
-        severity = severityHint(cls)?.unit === 'Ω' ? parseValue(sevRaw) : Number(sevRaw);
-        if (!Number.isFinite(severity) || severity <= 0) { this.toast('Invalid severity', 'danger'); return; }
-        if (cls === 'flex-open-joint' || cls === 'flex-close-joint') severity = Math.min(severity, 1);
-      }
-      this.pushUndo();
-      const f = injectFault(c, cls, rng((Math.random() * 2 ** 32) >>> 0), { severity, ...(padRaw !== '' && { pad: Number(padRaw) }) });
-      updateIntermittents(this.board, this.environment()); // a new intermittent takes its present state at once
-      sfxClick();
-      this.toast(f.describe, 'info');
-      this.recompute(true);
-      this.renderInspectTab();
-    });
-    this.sideBodyEl.querySelectorAll<HTMLButtonElement>('[data-clear-fault]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.pushUndo();
-        clearFault(c, b.dataset.clearFault!);
-        this.recompute(true);
-        this.renderInspectTab();
-      });
-    });
+  private renderInspectTab() {
+    this.getInspectPanel().render();
   }
 
   private environment() {
@@ -4079,7 +3855,7 @@ export class PcbApp {
       this.psuClock += dt;
       if (this.psuClock >= 0.1) { this.psuClock = 0; this.renderPsu(); if (this.scopeProbe) this.renderScope(); }
     }
-    if (this.scopeProbe) {
+    if (this.scopeProbe && !this.scopePaused) {
       this.scopeSample += dt;
       if (this.scopeSample >= 0.03) {
         this.scopeSample = 0;
