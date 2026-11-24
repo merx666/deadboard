@@ -1,10 +1,10 @@
-import type { Board, Component } from '../../types';
+import { getLang } from '../../i18n';
 import { fmtOhm, fmtSI, marking } from '../../model';
 import { installPart } from '../../ops';
-import { getLang } from '../../i18n';
-import { icon } from '../icons';
+import { type ComponentPart, findPartById, searchSupplierParts } from '../../parts/catalog';
+import type { Board, Component } from '../../types';
 import { sfxSolder } from '../audio';
-import { findPartById, searchSupplierParts, type ComponentPart } from '../../parts/catalog';
+import { icon } from '../icons';
 
 export interface PartsBinModalContext {
   getBoard: () => Board;

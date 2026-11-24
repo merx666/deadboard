@@ -1,8 +1,8 @@
-import type { Board, Scenario } from '../../types';
 import { getLang } from '../../i18n';
-import { icon } from '../icons';
-import { sfxWin } from '../audio';
 import { findPartById, searchSupplierParts } from '../../parts/catalog';
+import type { Board, Scenario } from '../../types';
+import { sfxWin } from '../audio';
+import { icon } from '../icons';
 
 export interface OrderModalContext {
   getBoard: () => Board;

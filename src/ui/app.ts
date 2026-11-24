@@ -13,9 +13,8 @@ import { netAt, pickAt, type PickHit } from '../pick';
 import { runSolver, verifyScenario, type Solver, type VerifyResult } from '../verify';
 import { lockFlag, packText, topology, unpackText } from '../crypto';
 import { serializeScenario } from '../io/format';
-import { MOD_FORMAT, type ModBoard } from '../mods/mods';
-import { desktop, installMod, loadAllMods, modsFolderPath, removeInstalled, type ModLoadResult } from '../mods/sources';
-import { writeZip } from '../mods/zip';
+import type { ModBoard } from '../mods/mods';
+import { installMod, loadAllMods, type ModLoadResult } from '../mods/sources';
 import { builtinScenarios } from '../scenarios/builtin';
 import { Builder } from '../scenarios/builder';
 import { BOTH_GAP, Camera } from '../render/camera';
@@ -32,7 +31,7 @@ import { setSoundEnabled, sfxBeep, sfxBlow, sfxClick, sfxCut, sfxSolder, sfxWin,
 import { icon } from './icons';
 import { mountFeedbackForm, type FeedbackContext } from './feedback';
 import { BRAND, markSvg } from './logo';
-import { TUTORIAL_SCENARIO_IDS, getTutorialTopics, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
+import { TUTORIAL_SCENARIO_IDS, getTutorialSteps, isTutorialScenario, nextTutorialScenarioId, type TutorialStep } from './tutorial';
 import { TOOL_SHORT, TOOL_TIP_PHONE, TouchGestures, splitLead, touchCopy, wantsMobileLayout } from './touch';
 import { getLang, setLang, t as i18n, translateScenario } from '../i18n';
 import { BOARD_PRESET_METAS, type BoardPresetMeta } from '../boards/presetsMeta';
@@ -41,6 +40,9 @@ import { PartsBinModalController } from './modals/partsBinModal';
 import { ShortcutsModalController } from './modals/shortcutsModal';
 import { ReportModalController } from './modals/reportModal';
 import { HelpModalController } from './modals/helpModal';
+import { BoardsModalController } from './modals/boardsModal';
+import { ModsModalController } from './modals/modsModal';
+import { FeedbackModalController } from './modals/feedbackModal';
 
 type ToolId = 'inspect' | 'dmm' | 'iron' | 'wick' | 'flip180' | 'jumper' | 'knife' | 'replace' | 'freeze' | 'ipa' | 'press' | 'hotair' | 'scope' | 'rosin';
 type PanelTab = 'mission' | 'inspect' | 'studio';
@@ -191,11 +193,13 @@ export class PcbApp {
   private showReport = false;
   private reportModal: ReportModalController | null = null;
   private showFeedback = false;
+  private feedbackModal: FeedbackModalController | null = null;
   private showBoards = false;
+  private boardsModal: BoardsModalController | null = null;
   private showOrder = false;
   private orderModal: OrderModalController | null = null;
-  private boardFilter: 'all' | 'tutorials' | 'challenges' | 'hardware' | 'mods' = 'all';
   private showMods = false;
+  private modsModal: ModsModalController | null = null;
   private showPartsBin = false;
   private partsBinModal: PartsBinModalController | null = null;
   /** Ids of the boards that ship with LiveBoard (built-ins + demos): an author's copy needs its own id. */
@@ -206,7 +210,6 @@ export class PcbApp {
   private openScenarioSeq = 0;
   private modResult: ModLoadResult = { mods: [], failed: [] };
   private schematicUrls = new Map<ModBoard, string>();
-  private boardSearch = '';
   private lastBeepKey = '';
   private tutorialOpen = localStorage.getItem('pcbfix_tut_dismissed') !== '1';
   private tutorialStep = 0;
@@ -415,23 +418,18 @@ export class PcbApp {
     };
   }
 
-  private renderFeedbackModal() {
-    this.modalRootEl.innerHTML = `
-      <div class="modal-backdrop" id="fb-close-bg">
-        <div class="modal" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0)">
-          <div class="modal-head" title="Drag to move window">
-            <h2>Feedback</h2>
-            <button class="btn ghost icon sm" id="fb-close" title="Close">${icon('x', 14)}</button>
-          </div>
-          <div class="card"><div id="fb-host"></div></div>
-        </div>
-      </div>`;
-    mountFeedbackForm(this.modalRootEl.querySelector<HTMLElement>('#fb-host')!, () => this.feedbackContext());
-    this.modalRootEl.querySelector('#fb-close')?.addEventListener('click', () => this.openFeedback(false));
-    this.modalRootEl.querySelector('#fb-close-bg')?.addEventListener('click', (e) => {
-      if (this.suppressModalBgClose) { this.suppressModalBgClose = false; return; }
-      if ((e.target as HTMLElement).id === 'fb-close-bg') this.openFeedback(false);
-    });
+  private getFeedbackModal(): FeedbackModalController {
+    if (!this.feedbackModal) {
+      this.feedbackModal = new FeedbackModalController({
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        getFeedbackContext: () => this.feedbackContext(),
+        onClose: () => this.openFeedback(false),
+        isSuppressModalBgClose: () => this.suppressModalBgClose,
+        resetSuppressModalBgClose: () => { this.suppressModalBgClose = false; },
+      });
+    }
+    return this.feedbackModal;
   }
 
   private buildDom() {
@@ -3771,7 +3769,7 @@ export class PcbApp {
       this.toast('Exported .pcbfix.json challenge!', 'success');
     });
 
-    this.sideBodyEl.querySelector('#st-export-mod')?.addEventListener('click', () => { syncMeta(); void this.exportBoardAsMod(); });
+    this.sideBodyEl.querySelector('#st-export-mod')?.addEventListener('click', () => { syncMeta(); void this.getModsModal().exportBoardAsMod(); });
 
     this.sideBodyEl.querySelector('#st-share-url')?.addEventListener('click', async () => {
       syncMeta();
@@ -3802,387 +3800,72 @@ export class PcbApp {
     this.renderModal();
   }
 
-  private classifyScenario(s: Scenario): 'tutorials' | 'challenges' | 'hardware' | 'mods' {
-    if (this.modBoards.has(s)) return 'mods';
-    if (isTutorialScenario(s.id)) return 'tutorials';
-    if (this.presetStubs.has(s) || s.solver === 'spice-power' || this.demoUrls.has(s) || s.board.components.length > 50) {
-      return 'hardware';
-    }
-    return 'challenges';
-  }
-
-  /** Phone board list: one compact row per board (badge, title, two lines of description, status). */
-  private phoneCatalogSection(title: string, solved: number, items: { s: Scenario; idx: number }[]): string {
-    return `
-      <section class="cat-sec">
-        <div class="cat-sec-head"><h3>${this.esc(title)}</h3><span class="badge info">${solved}/${items.length}</span></div>
-        <div class="m-cat-list">
-          ${items.map(({ s, idx }) => {
-            const isActive = s === this.activeScenario;
-            const isSolved = this.solvedIds.has(s.id);
-            const tutIdx = TUTORIAL_SCENARIO_IDS.indexOf(s.id as (typeof TUTORIAL_SCENARIO_IDS)[number]);
-            const badge = tutIdx >= 0 ? `<span class="br-badge tut">${tutIdx + 1}</span>` : `<span class="br-badge" title="Difficulty ${s.meta.difficulty}/5">L${s.meta.difficulty}</span>`;
-            const state = isSolved ? `<span class="br-state ok">${icon('check', 14)}</span>` : isActive ? `<span class="br-state on">Open</span>` : `<span class="br-state">${icon('chevronRight', 14)}</span>`;
-            return `
-              <button class="board-row ${isActive ? 'active' : ''} ${isSolved ? 'solved' : ''}" data-pick-board="${idx}">
-                ${badge}
-                <span class="br-main"><span class="br-title">${this.esc(s.meta.title)}</span><span class="br-desc">${this.esc(s.meta.description.replace(/^Beginner Tutorial \d+:\s*/, ''))}</span></span>
-                ${state}
-              </button>`;
-          }).join('')}
-        </div>
-      </section>`;
-  }
-
-  private renderBoardsModal() {
-    const isPl = getLang() === 'pl';
-    type CatKey = 'tutorials' | 'challenges' | 'hardware' | 'mods';
-    const counts: Record<CatKey, number> = { tutorials: 0, challenges: 0, hardware: 0, mods: 0 };
-    for (const s of this.scenarios) counts[this.classifyScenario(s)]++;
-
-    const sections: { key: CatKey; title: string; sub: string }[] = isPl ? [
-      { key: 'tutorials', title: 'Samouczki dla początkujących', sub: 'Prowadzone krok po kroku płytki wyjaśniające podstawy elektroniki i napraw' },
-      { key: 'challenges', title: 'Wyzwania serwisowe', sub: 'Zagadki diagnostyczne i lokalizowanie usterek w układach' },
-      { key: 'hardware', title: 'Prawdziwy sprzęt & Open Source', sub: 'Pełne schematy z setkami elementów i boardview z silnikiem SPICE + PWR' },
-      { key: 'mods', title: 'Modyfikacje społeczności', sub: 'Płytki z zainstalowanych modów. Zarządzaj nimi przyciskiem Mody' },
-    ] : [
-      { key: 'tutorials', title: 'Beginner Tutorials', sub: 'Guided step-by-step boards covering the core fundamentals' },
-      { key: 'challenges', title: 'Repair Challenges', sub: 'Standalone fault-finding & multi-fault diagnostic puzzles' },
-      { key: 'hardware', title: 'Real Hardware & Open Source', sub: 'Full multi-hundred-part schematics & boardviews on SPICE + PWR' },
-      { key: 'mods', title: 'Community Mods', sub: 'Boards from mods you installed. Manage them with the Mods button' },
-    ];
-
-    const renderList = () => {
-      const q = this.boardSearch.trim().toLowerCase();
-      const blocks = sections
-        .filter((sec) => this.boardFilter === 'all' || this.boardFilter === sec.key)
-        .map((sec) => {
-          const items = this.scenarios
-            .map((s, idx) => ({ s, idx }))
-            .filter(({ s }) => this.classifyScenario(s) === sec.key)
-            .filter(({ s }) => {
-              if (!q) return true;
-              const topics = getTutorialTopics(s.id)?.join(' ') ?? '';
-              const mod = this.modBoards.get(s)?.mod.name ?? '';
-              return `${s.meta.title} ${s.meta.description} ${s.meta.author} ${topics} ${mod}`.toLowerCase().includes(q);
-            });
-          if (!items.length) return '';
-          const solvedInSec = items.filter(({ s }) => this.solvedIds.has(s.id)).length;
-          if (this.mobile) return this.phoneCatalogSection(sec.title, solvedInSec, items);
-          return `
-            <section class="cat-sec">
-              <div class="cat-sec-head">
-                <div>
-                  <h3>${this.esc(sec.title)}</h3>
-                  <p>${this.esc(sec.sub)}</p>
-                </div>
-                <span class="badge info">${solvedInSec}/${items.length} solved</span>
-              </div>
-              <div class="cat-grid">
-                ${items.map(({ s, idx }) => {
-                  const isActive = s === this.activeScenario;
-                  const isSolved = this.solvedIds.has(s.id);
-                  const tr = translateScenario(s.id, s.meta.title, s.meta.description);
-                  const tutIdx = TUTORIAL_SCENARIO_IDS.indexOf(s.id as (typeof TUTORIAL_SCENARIO_IDS)[number]);
-                  const topics = getTutorialTopics(s.id);
-                  const chips: string[] = [];
-                  const mb = this.modBoards.get(s);
-                  if (mb) {
-                    chips.push(mb.mod.name, `by ${mb.mod.author}`);
-                    if (mb.schematic) chips.push('Schematic');
-                    if (s.meta.license) chips.push(s.meta.license);
-                  } else if (topics) {
-                    chips.push(...topics);
-                  } else {
-                    if (s.board.components.length > 1) chips.push(`${s.board.components.length} parts`);
-                    if (s.meta.par) chips.push(`Par ${s.meta.par}`);
-                    if (s.solver === 'spice-power') chips.push('SPICE + PWR');
-                    if (this.videos[s.id]) chips.push('Video guide');
-                    if (s.meta.license) chips.push(s.meta.license);
-                  }
-                  const leftBadge = tutIdx >= 0
-                    ? `<span class="badge info">Tutorial ${tutIdx + 1}</span>`
-                    : `<span class="row"><span class="badge">L${s.meta.difficulty}</span><span class="lvl" title="Difficulty ${s.meta.difficulty}/5">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.meta.difficulty ? 'on' : ''}"></i>`).join('')}</span></span>`;
-                  const rightBadge = isSolved
-                    ? `<span class="badge pass">${icon('check', 11)}<span>${getLang() === 'pl' ? 'Rozwiązane' : 'Solved'}</span></span>`
-                    : isActive
-                      ? `<span class="badge info">${getLang() === 'pl' ? 'Aktywna' : 'Active'}</span>`
-                      : tutIdx >= 0
-                        ? `<span class="badge">${getLang() === 'pl' ? 'Interaktywne' : 'Interactive'}</span>`
-                        : '';
-                  return `
-                    <button class="board-card ${isActive ? 'active' : ''} ${isSolved ? 'solved' : ''}" data-pick-board="${idx}">
-                      <div class="bc-top">
-                        ${leftBadge}
-                        ${rightBadge}
-                      </div>
-                      <div class="bc-title">${this.esc(tr.title)}</div>
-                      <div class="bc-desc">${this.esc(tr.description)}</div>
-                      ${chips.length ? `<div class="cat-chips">${chips.map((c) => `<span class="cat-chip">${this.esc(c)}</span>`).join('')}</div>` : ''}
-                    </button>
-                  `;
-                }).join('')}
-              </div>
-            </section>
-          `;
-        })
-        .join('');
-      return blocks || `<div class="muted" style="padding:24px;text-align:center">No matching boards found.</div>`;
-    };
-
-    const filters: { id: 'all' | CatKey; label: string; count: number }[] = [
-      { id: 'all', label: 'All', count: this.scenarios.length },
-      { id: 'tutorials', label: 'Tutorials', count: counts.tutorials },
-      { id: 'challenges', label: 'Challenges', count: counts.challenges },
-      { id: 'hardware', label: this.mobile ? 'Hardware' : 'Real Hardware', count: counts.hardware },
-      ...(counts.mods ? [{ id: 'mods' as const, label: 'Mods', count: counts.mods }] : []),
-    ];
-
-    this.modalRootEl.innerHTML = this.mobile ? `
-      <div class="modal-backdrop" id="modal-close-bg">
-        <div class="modal board-catalog m-cat">
-          <div class="modal-head">
-            <div class="row"><h2>Boards</h2><span class="badge info">${this.solvedIds.size}/${this.scenarios.length} solved</span></div>
-            <button class="btn ghost icon sm" id="modal-close" title="Close">${icon('x', 14)}</button>
-          </div>
-          <div class="cat-toolbar">
-            <div class="m-cat-filters">
-              ${filters.map((f) => `<button class="${this.boardFilter === f.id ? 'on' : ''}" data-cat-filter="${f.id}">${this.esc(f.label)} <span>${f.count}</span></button>`).join('')}
-            </div>
-            <input type="text" id="cat-search" placeholder="Search boards" value="${this.esc(this.boardSearch)}" />
-          </div>
-          <div class="cat-body" id="cat-list">${renderList()}</div>
-          <div class="m-cat-foot">
-            <button class="btn sm" id="cat-new">${icon('plus', 13)}<span>Blank</span></button>
-            <button class="btn sm" id="cat-import">${icon('upload', 13)}<span>Import</span></button>
-            <button class="btn sm" id="cat-mods">${icon('box', 13)}<span>Mods${this.modResult.failed.length ? ' ⚠' : ''}</span></button>
-          </div>
-        </div>
-      </div>
-    ` : `
-      <div class="modal-backdrop" id="modal-close-bg">
-        <div class="modal board-catalog" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0)">
-          <div class="modal-head" title="Drag to move window">
-            <div class="row">
-              <h2>Boards &amp; Tutorials</h2>
-              <span class="badge info">${this.solvedIds.size} / ${this.scenarios.length} solved</span>
-            </div>
-            <div class="row">
-              <button class="btn sm" id="cat-creator" style="color:var(--accent);border-color:var(--accent);" title="${isPl ? 'Twórz własne płytki i dobieraj części PCBWay/LCSC' : 'Create custom boards and pick PCBWay/LCSC parts'}">${icon('grid', 13)}<span>${isPl ? 'Kreator Płytek' : 'Board Creator'}</span></button>
-              <button class="btn sm" id="cat-new">${icon('plus', 13)}<span>${isPl ? 'Pusta płytka' : 'Blank board'}</span></button>
-              <button class="btn sm" id="cat-import">${icon('upload', 13)}<span>${isPl ? 'Importuj' : 'Import'}</span></button>
-              <button class="btn sm" id="cat-mods" title="Install, remove and make mods">${icon('box', 13)}<span>Mods${this.modResult.failed.length ? ' ⚠' : ''}</span></button>
-              <button class="btn ghost icon sm" id="modal-close" title="Close (Esc)">${icon('x', 14)}</button>
-            </div>
-          </div>
-          <div class="cat-toolbar">
-            <div class="seg">
-              ${filters.map((f) => `<button class="${this.boardFilter === f.id ? 'on' : ''}" data-cat-filter="${f.id}">${this.esc(f.label)} (${f.count})</button>`).join('')}
-            </div>
-            <input type="text" id="cat-search" class="grow" placeholder="Filter boards by name, symptom, or topic…" value="${this.esc(this.boardSearch)}" />
-          </div>
-          <div class="cat-body" id="cat-list">${renderList()}</div>
-        </div>
-      </div>
-    `;
-
-    const closeModal = () => {
-      this.showBoards = false;
-      this.renderModal();
-    };
-    const bindBoardPickers = () => {
-      this.modalRootEl.querySelectorAll<HTMLButtonElement>('[data-pick-board]').forEach((b) => {
-        b.addEventListener('click', () => {
-          const idx = Number(b.dataset.pickBoard);
-          closeModal();
-          if (this.scenarios[idx]) void this.openScenario(idx);
-        });
+  private getBoardsModal(): BoardsModalController {
+    if (!this.boardsModal) {
+      this.boardsModal = new BoardsModalController({
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        isMobile: () => this.mobile,
+        getScenarios: () => this.scenarios,
+        getActiveScenario: () => this.activeScenario,
+        getSolvedIds: () => this.solvedIds,
+        getModBoards: () => this.modBoards,
+        getPresetStubs: () => this.presetStubs,
+        getDemoUrls: () => this.demoUrls,
+        hasVideo: (id) => Boolean(this.videos[id]),
+        getModFailedCount: () => this.modResult.failed.length,
+        openScenario: (idx) => this.openScenario(idx),
+        openBoardCreator: () => this.openBoardCreator(),
+        createBlankBoard: () => this.createBlankBoard(),
+        openMods: () => {
+          this.showBoards = false;
+          this.showMods = true;
+          this.renderModal();
+        },
+        importBoard: () => this.fileInputEl.click(),
+        esc: (s) => this.esc(s),
+        onClose: () => {
+          this.showBoards = false;
+          this.renderModal();
+        },
+        isSuppressModalBgClose: () => this.suppressModalBgClose,
+        resetSuppressModalBgClose: () => { this.suppressModalBgClose = false; },
       });
-    };
-    bindBoardPickers();
-
-    this.modalRootEl.querySelector('#modal-close')?.addEventListener('click', closeModal);
-    this.modalRootEl.querySelector('#modal-close-bg')?.addEventListener('click', (e) => {
-      if (this.suppressModalBgClose) {
-        this.suppressModalBgClose = false;
-        return;
-      }
-      if ((e.target as HTMLElement).id === 'modal-close-bg') closeModal();
-    });
-    this.modalRootEl.querySelector('#cat-creator')?.addEventListener('click', () => {
-      closeModal();
-      void this.openBoardCreator();
-    });
-    this.modalRootEl.querySelector('#cat-new')?.addEventListener('click', () => this.createBlankBoard());
-    this.modalRootEl.querySelector('#cat-mods')?.addEventListener('click', () => {
-      this.showBoards = false;
-      this.showMods = true;
-      this.renderModal();
-    });
-    this.modalRootEl.querySelector('#cat-import')?.addEventListener('click', () => {
-      closeModal();
-      this.fileInputEl.click();
-    });
-    this.modalRootEl.querySelectorAll<HTMLButtonElement>('[data-cat-filter]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.boardFilter = b.dataset.catFilter as 'all' | CatKey;
-        this.renderBoardsModal();
-      });
-    });
-    const searchEl = this.modalRootEl.querySelector<HTMLInputElement>('#cat-search');
-    const listBox = this.modalRootEl.querySelector<HTMLElement>('#cat-list');
-    searchEl?.addEventListener('input', () => {
-      this.boardSearch = searchEl.value;
-      if (listBox) {
-        listBox.innerHTML = renderList();
-        bindBoardPickers();
-      }
-    });
-  }
-
-  /** Modding guide: on the website next to the bench; the desktop app opens the site in the browser. */
-  private get moddingUrl() {
-    return desktop ? `${BRAND.site}modding.html` : './modding.html';
-  }
-
-  private renderModsModal() {
-    const { mods, failed } = this.modResult;
-    const boardIdx = (b: ModBoard) => this.scenarios.findIndex((s) => this.modBoards.get(s) === b);
-    const modCards = mods.map((m) => {
-      const mf = m.manifest;
-      return `
-        <div class="card mod-card">
-          <div class="mod-head">
-            <div>
-              <div class="mod-name">${this.esc(mf.name)} <span class="muted mono">v${this.esc(mf.version)}</span></div>
-              <div class="muted">by ${this.esc(mf.author)} · ${this.esc(mf.license)} · ${this.esc(m.source.origin)}${mf.homepage ? ` · <a href="${this.esc(mf.homepage)}" target="_blank" rel="noopener">homepage</a>` : ''}</div>
-            </div>
-            ${m.source.origin === 'Installed' ? `<button class="btn sm ghost" data-mod-remove="${this.esc(mf.id)}" title="Remove this mod">${icon('x', 12)}<span>Remove</span></button>` : ''}
-          </div>
-          ${mf.description ? `<p class="text-2" style="margin:0">${this.esc(mf.description)}</p>` : ''}
-          <div class="mod-boards">
-            ${m.boards.map((b) => `<button class="btn sm" data-mod-open="${boardIdx(b)}">${icon('play', 11)}<span>${this.esc(b.stub.meta.title)}</span>${b.schematic ? `<span class="muted">· schematic</span>` : ''}</button>`).join('')}
-          </div>
-          ${m.warnings.length ? `<details class="mod-warn"><summary>${m.warnings.length} warning${m.warnings.length > 1 ? 's' : ''}</summary><ul>${m.warnings.map((w) => `<li>${this.esc(w)}</li>`).join('')}</ul></details>` : ''}
-        </div>`;
-    }).join('');
-    const failedCards = failed.map((f) => `
-      <div class="card mod-card mod-failed">
-        <div class="card-title" style="margin:0">${icon('x', 13)} ${this.esc(f.name)} <span class="muted">${this.esc(f.origin)}</span></div>
-        <p class="text-2 mono" style="margin:0;overflow-wrap:anywhere">${this.esc(f.error)}</p>
-      </div>`).join('');
-
-    this.modalRootEl.innerHTML = `
-      <div class="modal-backdrop" id="mods-close-bg">
-        <div class="modal board-catalog" style="transform: translate3d(${this.modalPos[0]}px, ${this.modalPos[1]}px, 0)">
-          <div class="modal-head" title="Drag to move window">
-            <div class="row">
-              <h2>Mods</h2>
-              <span class="badge info">${mods.length} loaded</span>
-            </div>
-            <div class="row">
-              <button class="btn sm primary" id="mods-install">${icon('upload', 13)}<span>Install mod (.zip)</span></button>
-              ${desktop ? `<button class="btn sm" id="mods-folder" title="${this.esc(modsFolderPath ?? '')}">${icon('box', 13)}<span>Open mods folder</span></button>` : ''}
-              <button class="btn sm" id="mods-back">${icon('grid', 13)}<span>Boards</span></button>
-              <button class="btn ghost icon sm" id="mods-close" title="Close (Esc)">${icon('x', 14)}</button>
-            </div>
-          </div>
-          <div class="cat-body">
-            <div class="card">
-              <p class="text-2" style="margin:0">
-                Mods add boards made by other people: KiCad or boardview files, repair challenges from the Author tab,
-                with their BOM and schematic. Mods are data only, they can't run code.
-                ${desktop ? 'Install a .zip here, or put mod folders / .zip files into the mods folder and reload (Ctrl/Cmd+R).' : 'Install a .zip here or drop it on the bench; it stays in this browser.'}
-              </p>
-              <div class="row wrap">
-                <a class="btn sm" href="${this.moddingUrl}" target="_blank" rel="noopener">${icon('book', 13)}<span>How to make a mod</span></a>
-                <button class="btn sm ghost" id="mods-export">${icon('download', 13)}<span>Current board as a mod</span></button>
-              </div>
-            </div>
-            ${failedCards}
-            ${modCards || `<div class="muted" style="padding:24px;text-align:center">No mods yet. Install a mod .zip, or make one from any board with "Current board as a mod".</div>`}
-          </div>
-          <input type="file" id="mods-file" accept=".zip,application/zip" hidden />
-        </div>
-      </div>`;
-
-    const close = () => { this.showMods = false; this.renderModal(); };
-    const root = this.modalRootEl;
-    root.querySelector('#mods-close')?.addEventListener('click', close);
-    root.querySelector('#mods-close-bg')?.addEventListener('click', (e) => {
-      if (this.suppressModalBgClose) { this.suppressModalBgClose = false; return; }
-      if ((e.target as HTMLElement).id === 'mods-close-bg') close();
-    });
-    root.querySelector('#mods-back')?.addEventListener('click', () => { this.showMods = false; this.showBoards = true; this.renderModal(); });
-    const fileEl = root.querySelector<HTMLInputElement>('#mods-file')!;
-    root.querySelector('#mods-install')?.addEventListener('click', () => fileEl.click());
-    fileEl.addEventListener('change', async () => {
-      const f = fileEl.files?.[0];
-      if (!f) return;
-      // installed cleanly: show its first board; otherwise stay here to show the error / warnings
-      const warnings = await this.installModFile(f);
-      if (warnings === 0) close();
-      else if (this.showMods) this.renderModsModal();
-    });
-    root.querySelector('#mods-folder')?.addEventListener('click', () => void desktop?.openModsFolder());
-    root.querySelector('#mods-export')?.addEventListener('click', () => void this.exportBoardAsMod());
-    root.querySelectorAll<HTMLButtonElement>('[data-mod-open]').forEach((b) => b.addEventListener('click', () => {
-      const i = Number(b.dataset.modOpen);
-      close();
-      if (this.scenarios[i]) void this.openScenario(i);
-    }));
-    root.querySelectorAll<HTMLButtonElement>('[data-mod-remove]').forEach((b) => b.addEventListener('click', async () => {
-      const id = b.dataset.modRemove!;
-      const name = mods.find((m) => m.manifest.id === id)?.manifest.name ?? id;
-      if (!confirm(`Remove the mod "${name}"? Its boards disappear from the list (your progress on them is kept).`)) return;
-      try {
-        await removeInstalled(id);
-        await this.loadMods();
-        this.refreshScenarioSelect();
-        this.toast(`Removed mod "${name}"`, 'success');
-      } catch (e) {
-        this.toast(`Could not remove the mod: ${e instanceof Error ? e.message : e}`, 'danger');
-      }
-      this.renderModsModal();
-    }));
-  }
-
-  /** Packs the open board (with its current faults, objectives and flag lock) as a ready-to-share mod. */
-  private async exportBoardAsMod() {
-    const s = this.activeScenario;
-    const slug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'board';
-    const boardId = slug(s.meta.title);
-    const author = s.meta.author && s.meta.author !== 'anonymous' ? s.meta.author : 'your-name';
-    const manifest = {
-      format: MOD_FORMAT,
-      id: `${slug(author)}-${boardId}`.slice(0, 64),
-      name: s.meta.title,
-      version: '1.0.0',
-      author,
-      description: s.meta.description.slice(0, 300),
-      license: s.meta.license ?? 'CC-BY-4.0',
-      boards: [{ id: boardId, file: `boards/${boardId}.pcbfix.json` }],
-    };
-    const out: Scenario = { ...s, board: cloneBoard(this.board) };
-    // a built-in board keeps the built-in's id and flag: give the copy its own id; the old lock can't
-    // follow (it is derived from the id), so the author locks a flag of their own first
-    let lockNote = '';
-    if (this.bundledIds.has(s.id)) {
-      out.id = `${manifest.id}-${boardId}`.slice(0, 80);
-      if (out.lock) { delete out.lock; lockNote = ' It has no flag: lock your own in the Author tab first if you want one.'; }
     }
-    const te = new TextEncoder();
-    const zip = await writeZip([
-      ['mod.json', te.encode(JSON.stringify(manifest, null, 2) + '\n')],
-      [`boards/${boardId}.pcbfix.json`, te.encode(serializeScenario(out))],
-    ]);
-    const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${manifest.id}.zip`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    this.toast(`Saved ${manifest.id}.zip: check the name, author and licence in mod.json before sharing.${lockNote}`, lockNote ? 'info' : 'success');
+    return this.boardsModal;
+  }
+
+  private getModsModal(): ModsModalController {
+    if (!this.modsModal) {
+      this.modsModal = new ModsModalController({
+        getModalPos: () => this.modalPos,
+        modalRootEl: this.modalRootEl,
+        getModResult: () => this.modResult,
+        getModBoards: () => this.modBoards,
+        getScenarios: () => this.scenarios,
+        getActiveScenario: () => this.activeScenario,
+        getBoard: () => this.board,
+        getBundledIds: () => this.bundledIds,
+        openScenario: (idx) => this.openScenario(idx),
+        installModFile: (f) => this.installModFile(f),
+        loadMods: () => this.loadMods(),
+        refreshScenarioSelect: () => this.refreshScenarioSelect(),
+        openBoards: () => {
+          this.showMods = false;
+          this.showBoards = true;
+          this.renderModal();
+        },
+        toast: (msg, kind) => this.toast(msg, kind),
+        esc: (s) => this.esc(s),
+        onClose: () => {
+          this.showMods = false;
+          this.renderModal();
+        },
+        isSuppressModalBgClose: () => this.suppressModalBgClose,
+        resetSuppressModalBgClose: () => { this.suppressModalBgClose = false; },
+      });
+    }
+    return this.modsModal;
   }
 
   private getPartsBinModal(): PartsBinModalController {
@@ -4236,15 +3919,15 @@ export class PcbApp {
       return;
     }
     if (this.showBoards) {
-      this.renderBoardsModal();
+      this.getBoardsModal().render();
       return;
     }
     if (this.showMods) {
-      this.renderModsModal();
+      this.getModsModal().render();
       return;
     }
     if (this.showFeedback) {
-      this.renderFeedbackModal();
+      this.getFeedbackModal().render();
       return;
     }
     if (this.showShortcuts) {

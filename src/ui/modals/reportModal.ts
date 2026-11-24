@@ -1,5 +1,5 @@
-import type { Board, Objective, Scenario } from '../../types';
 import { getLang, translateScenario } from '../../i18n';
+import type { Board, Objective, Scenario } from '../../types';
 import { icon } from '../icons';
 
 export interface ReportModalContext {
