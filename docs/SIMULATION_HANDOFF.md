@@ -75,9 +75,10 @@ No reference hardware is available, so realism is validated against *design inte
   mods + the modding guide page `modding.html`, linked from the homepage). Earlier that day: Both-view
   X-ray (`826a8c0`), inverted left/right when looking up at the underside (`b031184`), issue #1
   closed, feedback form verified. No open issues.
-- **Possible bug to check first:** on a net nothing drives (night-light challenge from the starter
-  kit, SW1 open, probe R1.1), the multimeter reads exactly `+1.000 V`; a real meter shows about 0 V.
-  Probably how the fast solver reports a floating node. Reproduce, fix, add a test.
+- **Resolved bug:** on a net nothing drives (night-light challenge from the starter
+  kit, SW1 open, probe R1.1), the multimeter previously read `+1.000 V` due to open-switch BFS traversal
+  forming a residual conductance divider. Fixed in `src/sim.ts` by skipping open switches in graph BFS,
+  yielding ~0 V on disconnected nets, verified with a test in `test/solve.test.ts`.
 
 - **Released 2026-11-16 as v0.1.0**: public repo https://github.com/tholtman1-del/deadboard
   (Apache-2.0), live site https://tholtman1-del.github.io/deadboard/ (homepage `index.html` +

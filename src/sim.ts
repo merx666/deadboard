@@ -112,8 +112,12 @@ export function simulate(board: Board, conn: Conn, opt: SimOpts = {}): Sim {
   const n = nn;
   const reachable = new Uint8Array(n);
   const adj: number[][] = Array.from({ length: n }, () => []);
+  const sw = opt.switches;
+  const isSwitchClosed = (c: Component) => (sw?.[c.ref] ?? !!c.state.closed);
+
   for (const e of els) {
     if (e.c.state.burnt) continue;
+    if (e.c.kind === 'switch' && !isSwitchClosed(e.c)) continue;
     if (probePair && e.c.kind === 'battery') continue;
     adj[e.a].push(e.b);
     adj[e.b].push(e.a);
@@ -153,7 +157,6 @@ export function simulate(board: Board, conn: Conn, opt: SimOpts = {}): Sim {
   const activeEls = els.filter((e) => !e.c.state.burnt && (reachable[e.a] || reachable[e.b]));
 
   let V = new Float64Array(n);
-  const sw = opt.switches;
   const batV = new Map<string, number>();
   for (const e of els) if (e.c.kind === 'battery') batV.set(e.c.id, e.c.value);
   let ccLimited = false;

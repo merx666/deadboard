@@ -349,6 +349,28 @@ async function run() {
     assertEq(sim.comps.get(d1.id)?.on, true, 'Imported KiCad LED should light up');
   }
 
+  // 6.5. Open Switch Isolation & Floating Net Check
+  {
+    const modName = 'node:fs/promises';
+    const fs = (await import(/* @vite-ignore */ modName)) as { readFile(path: URL): Promise<Uint8Array> };
+    const jsonBytes = await fs.readFile(new URL('../examples/mods/starter-kit/boards/night-light-repair.pcbfix.json', import.meta.url));
+    const sc = JSON.parse(new TextDecoder().decode(jsonBytes));
+    const conn = buildConnectivity(sc.board);
+
+    // With SW1 open, net SW and R1.1 should read ~0 V (not a 1.0 V phantom voltage divider)
+    const simOpen = simulate(sc.board, conn, { switches: { SW1: false } });
+    const sw1 = sc.board.components.find((c: { ref: string }) => c.ref === 'SW1')!;
+    const netSw = pinNet(conn, sw1, '2');
+    const nodeSw = simOpen.nodeOfNet.get(netSw);
+    const vSwOpen = nodeSw !== undefined ? simOpen.V[nodeSw] : 0;
+    assert(Math.abs(vSwOpen) < 1e-4, `Open switch floating node SW must read ~0 V, got ${vSwOpen} V`);
+
+    // With SW1 closed, net SW should read close to battery voltage (~3.0 V)
+    const simClosed = simulate(sc.board, conn, { switches: { SW1: true } });
+    const vSwClosed = simClosed.V[simClosed.nodeOfNet.get(netSw)!];
+    assert(vSwClosed > 2.8 && vSwClosed <= 3.0, `Closed switch node SW must read ~3.0 V, got ${vSwClosed} V`);
+  }
+
   // 7. Complex Boardview (.brd) MacBook Air 820-00165 Benchmark + Fault/Repair Flow
   //    (private fixture: runs only where board_schemas/ is present, see test/fixtures.ts)
   const mac = await macbookFixture();
