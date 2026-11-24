@@ -274,6 +274,139 @@ function ghostShort() {
   });
 }
 
+function dieselEcu() {
+  const k = new Builder(100, 60);
+  k.b.color = '#1b3b2b';
+
+  // 1. KL30 Battery Power Terminal Header (5.0V regulated test harness supply)
+  const j1 = k.header('J1_BAT', 5.0, [10, 30], 0, 'KL30 5V');
+
+  // 2. Automotive Blade Fuse 1.0A
+  const f1 = k.fuse('F1', 1.0, [22, 30], 0);
+
+  // 3. TVS Overvoltage & Reverse Protection Diode (SMBJ14A)
+  // Cathode (pad 1) at [22, 10.92] on 5V_PROT, Anode (pad 2) at [22, 21.08] on GND
+  const d1 = k.diode('D1_TVS', [22, 16], 90);
+
+  // 4. Reservoir Filter Capacitor (470uF 25V)
+  const c1 = k.resistor('C1_RES', 10e6, [34, 16]);
+
+  // 5. Ignition Switch (Terminal 15)
+  const swIgn = k.tactile('SW1_IGN', [34, 30]);
+  swIgn.state.closed = true;
+
+  // 6. Automotive 5V Logic Stage (TLE4275)
+  const uLdo = k.resistor('U1_LDO', 0.05, [48, 30]);
+  const rPwr = k.resistor('R1_PWR', 330, [48, 40]);
+  const dPwr = k.led('D2_PWR', 'green', [48, 48]);
+
+  // 7. Protected 5V Sensor Rail Tracking Buffer & 10uF Decoupling Capacitor
+  const uSens = k.resistor('U2_SENS', 0.5, [62, 30]);
+  const rSens = k.resistor('R2_SENS', 330, [62, 40]);
+  const dSens = k.led('D3_SENS', 'blue', [62, 48]);
+  const cSens = k.resistor('C2_SENS', 10e6, [62, 22]);
+
+  // 8. Analog MAP Sensor Reference Voltage Divider
+  const rTop = k.resistor('R3_MAP', 4700, [74, 18]);
+  const rBot = k.resistor('R4_MAP', 2200, [74, 30]);
+
+  // Test Points
+  const tpBat = k.testpoint('TP_BAT', [10, 42], 'KL30_5V');
+  const tpIgn = k.testpoint('TP_IGN', [34, 46], 'KL15_IGN');
+  const tp5v = k.testpoint('TP_5V', [48, 16], '5V_VCC');
+  const tpSens = k.testpoint('TP_SENS', [62, 16], '5V_SENS');
+  const tpMap = k.testpoint('TP_MAP', [74, 42], 'MAP_SIG');
+  const tpGnd = k.testpoint('TP_GND', [10, 16], 'GND');
+
+  // Silkscreen text
+  k.text([50, 4], 'AUTOMOTIVE POWERTRAIN ECU (EDC DIESEL BENCH)', 1.5);
+  k.text([50, 58], 'KL30 BAT 5V · F1 FUSE · KL15 IGN · 5V VCC LOGIC · 5V SENS RAIL · MAP SENSOR', 0.95);
+  k.text([10, 22], 'KL30 5V', 0.9);
+  k.text([22, 24], '1A BLADE', 0.9);
+  k.text([22, 9], 'SMBJ14A TVS', 0.8);
+  k.text([34, 9], '470uF 25V', 0.8);
+  k.text([34, 37], 'KL15 IGN', 0.9);
+  k.text([48, 24], 'TLE4275 5V', 0.9);
+  k.text([48, 54], 'ECU PWR', 0.9);
+  k.text([62, 37], '5V SENSOR RAIL', 0.8);
+  k.text([62, 54], 'SENS 5V', 0.9);
+  k.text([62, 25], '10uF SENS CAP', 0.8);
+  k.text([74, 11], '4.7k PULLUP', 0.8);
+  k.text([74, 37], '2.2k MAP', 0.8);
+
+  // Front copper routing
+  k.track('F', [k.pad(j1, '1'), [6, 28.73], [6, 42], k.pad(tpBat, '1')], 1.5, '5V_BAT');
+  k.track('F', [[6, 28.73], [15.65, 28.73], k.pad(f1, '1')], 1.5, '5V_BAT');
+
+  k.track('F', [k.pad(f1, '2'), [28.35, 27.75], k.pad(swIgn, '1')], 1.5, '5V_PROT');
+  k.track('F', [[28.35, 27.75], [28.92, 20], k.pad(c1, '1')], 1.2, '5V_PROT');
+  k.track('F', [k.pad(c1, '1'), [22, 16], k.pad(d1, '1')], 1.2, '5V_PROT');
+
+  k.track('F', [k.pad(swIgn, '2'), [37.25, 30], k.pad(uLdo, '1')], 1.2, 'KL15_IGN');
+  k.track('F', [k.pad(swIgn, '2'), [34, 27.75], k.pad(tpIgn, '1')], 1.0, 'KL15_IGN');
+
+  k.track('F', [k.pad(uLdo, '2'), [48, 30], k.pad(tp5v, '1')], 1.0, '5V_VCC');
+  k.track('F', [k.pad(uLdo, '2'), [53.08, 36], [42.92, 36], k.pad(rPwr, '1')], 0.8, '5V_VCC');
+  k.track('F', [k.pad(uLdo, '2'), k.pad(uSens, '1')], 1.0, '5V_VCC');
+
+  k.track('F', [k.pad(rPwr, '2'), [49.27, 40], k.pad(dPwr, '2')], 0.6, 'PWR_LED');
+
+  k.track('F', [k.pad(uSens, '2'), [62, 30], k.pad(tpSens, '1')], 1.0, '5V_SENS');
+  k.track('F', [k.pad(uSens, '2'), [67.08, 36], [56.92, 36], k.pad(rSens, '1')], 0.8, '5V_SENS');
+  k.track('F', [k.pad(tpSens, '1'), [56.92, 16], k.pad(cSens, '1')], 0.8, '5V_SENS');
+  k.track('F', [k.pad(tpSens, '1'), [62, 12], [68.92, 12], k.pad(rTop, '1')], 0.8, '5V_SENS');
+
+  k.track('F', [k.pad(rSens, '2'), [63.27, 40], k.pad(dSens, '2')], 0.6, 'SENS_LED');
+
+  k.track('F', [k.pad(rTop, '2'), [84, 18], [84, 26], [68.92, 26], k.pad(rBot, '1')], 0.6, 'MAP_SIG');
+  k.track('F', [[68.92, 26], [68.92, 42], k.pad(tpMap, '1')], 0.6, 'MAP_SIG');
+
+  // Bottom copper routing (GND bus and test tracks)
+  k.track('B', [
+    k.pad(j1, '2'), [4, 31.27], [4, 6], [10, 6], k.pad(tpGnd, '1')
+  ], 1.2, 'GND');
+  k.track('B', [[10, 6], [18, 6], [18, 21.08], k.pad(d1, '2')], 1.2, 'GND');
+  k.track('B', [[10, 6], [39.08, 6], k.pad(c1, '2')], 1.2, 'GND');
+  k.track('B', [[39.08, 6], [67.08, 6], k.pad(cSens, '2')], 1.2, 'GND');
+  k.track('B', [[67.08, 6], [88, 6], [88, 30], k.pad(rBot, '2')], 1.2, 'GND');
+  k.track('B', [[88, 6], [94, 6], [94, 54], [60.73, 54], k.pad(dSens, '1')], 1.2, 'GND');
+  k.track('B', [[60.73, 54], [46.73, 54], k.pad(dPwr, '1')], 1.2, 'GND');
+
+  // Target pads on Back for authentic MLCC short-circuit solder bridge
+  k.track('B', [k.pad(cSens, '1'), [60.8, 22]], 0.8, '5V_SENS');
+  k.track('B', [k.pad(cSens, '2'), [63.2, 22]], 0.8, 'GND');
+
+  return finalize(
+    'builtin-diesel-ecu',
+    {
+      title: 'Diesel ECU: No 5V Sensor Supply',
+      author: 'DEADBOARD Automotive Lab',
+      difficulty: 4,
+      description:
+        'A Common Rail diesel powertrain ECU (Bosch EDC architecture). Vehicle diagnostics report DTC P0641 / P0651 (Sensor Reference Voltage A/B Circuit Open/Short). The engine cranks but will not start. The 5V logic rail powers the microcontroller, but the protected 5V sensor reference rail feeding the rail pressure and MAP sensors is dead. Find the short, repair the sensor rail, and restore both 5V logic and sensor supplies.',
+      hints: [
+        'Turn power ON and measure TP_5V (Logic 5V) and TP_SENS (Sensor 5V) with the multimeter in V⎓ mode: TP_5V is alive (~5.0 V), but TP_SENS reads 0.0 V!',
+        'Turn power OFF and switch the multimeter to Resistance (Ω) mode. Probe between TP_SENS and TP_GND: it reads ~0 Ω, revealing a short-circuit to ground.',
+        'Inspect sensor rail filter capacitor C2_SENS and the solder pads on the bottom layer. Remove the short with desoldering wick, replace damaged parts, and ensure fuse F1 is intact.',
+      ],
+      par: 3,
+    },
+    k.b,
+    [
+      { type: 'voltage', a: 'TP_5V', min: 4.80, max: 5.25 },
+      { type: 'voltage', a: 'TP_SENS', min: 4.80, max: 5.25 },
+      { type: 'led', ref: 'D2_PWR', on: true },
+      { type: 'led', ref: 'D3_SENS', on: true },
+    ],
+    'PCB{d13s3l_3cu_5v_s3ns0r_r41l_r3st0r3d}',
+    (b) => {
+      b.components.find((c) => c.ref === 'F1')!.state.burnt = true;
+      addBlob(b, [62, 22], 'B', 1.6);
+      b.components.find((c) => c.ref === 'C2_SENS')!.state.burnt = true;
+    },
+  );
+}
+
 export async function builtinScenarios(): Promise<Scenario[]> {
   const [base, extra] = await Promise.all([
     Promise.all([
@@ -286,6 +419,7 @@ export async function builtinScenarios(): Promise<Scenario[]> {
       bridgeTroll(),
       backwardsDay(),
       ghostShort(),
+      dieselEcu(),
     ]),
     realisticScenarios(),
   ]);

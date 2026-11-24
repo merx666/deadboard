@@ -61,7 +61,7 @@ function tutCheckState(
 
 async function run() {
   const scenarios = await builtinScenarios();
-  assertEq(scenarios.length, 11, 'Expected 11 built-in scenarios');
+  assertEq(scenarios.length, 12, 'Expected 12 built-in scenarios');
 
   for (const id of TUTORIAL_SCENARIO_IDS) {
     const steps = getTutorialSteps(id);
@@ -287,6 +287,31 @@ async function run() {
     const j1 = sc.board.components.find((c) => c.ref === 'J1')!;
     const iBat = simOcp.comps.get(j1.id)?.i ?? 0;
     assert(iBat <= 0.11, `OCP should clamp supply current near 0.1 A, got ${iBat}`);
+  }
+
+  // 4e. Diesel ECU: No 5V Sensor Supply (Automotive Powertrain EDC Architecture)
+  {
+    const sc = structuredClone(scenarios.find((s) => s.id === 'builtin-diesel-ecu')!);
+    const before = await verifyScenario(sc);
+    assertEq(before.allPassed, false);
+    assertEq(before.flag, null);
+
+    // Remove solder bridge blob on Back at [62, 22] under C2_SENS
+    const hit = pickAt(sc.board, [62, 22], 'B');
+    assert(hit && hit.kind === 'blob', 'Expected short blob on back of Diesel ECU C2_SENS');
+    removeBlob(sc.board, hit.blob);
+
+    // Replace shorted/burnt C2_SENS
+    const cSens = sc.board.components.find((c) => c.ref === 'C2_SENS')!;
+    installPart(cSens, { value: 10e6 });
+
+    // Replace blown fuse F1 (1A)
+    const f1 = sc.board.components.find((c) => c.ref === 'F1')!;
+    installPart(f1, { value: 1.0 });
+
+    const after = await verifyScenario(sc);
+    assertEq(after.allPassed, true);
+    assertEq(after.flag, 'PCB{d13s3l_3cu_5v_s3ns0r_r41l_r3st0r3d}');
   }
 
   // 5. Serialization + URL Pack/Unpack round-trip
