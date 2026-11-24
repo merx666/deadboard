@@ -5,7 +5,6 @@
 // file, schematics are shown as PDF / image, so a mod from a stranger can't run anything.
 // Format reference: docs/MODDING.md (also on the website: modding.html).
 import type { Objective, Scenario } from '../types';
-import { importScenarioOrPcb } from '../io/kicad';
 import { applyBom, parseBomCsv } from '../io/bom';
 import { cleanPath, isZip, readZip } from './zip';
 
@@ -185,6 +184,7 @@ export async function loadMod(src: ModSource, takenIds: (id: string) => boolean 
 
     const build = async (): Promise<Scenario> => {
       const bytes = await src.read(spec.file);
+      const { importScenarioOrPcb } = await import('../io/kicad');
       const sc = importScenarioOrPcb(spec.file.split('/').pop()!, bytes);
       const isChallenge = /\.json$/i.test(spec.file);
       // a .pcbfix.json keeps its own id: its flag lock is derived from it
