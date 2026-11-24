@@ -15,9 +15,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   (`.github/workflows/ci.yml`) alongside TypeScript checks. Configured with 0 errors and
   a tracked backlog of 137 approved warnings as `warn`, enforcing strict error rules like
   `noGlobalIsFinite` and `noGlobalIsNan`.
+- **SPICE nominal branded types**: introduced nominal branded types (`SpiceNode`, `RailName`,
+  `MnaIndex`) in `src/spice/types.ts` with brand constructors (`spiceNode()`, `railName()`,
+  `isRailName()`, `mnaIndex()`), preventing accidental confusion between arbitrary string labels,
+  SPICE net names, and power rail designations across board topology resolution and power tree detection.
 
 ### Changed
 
+- **Bundle performance & lazy loading**: extracted KiCad parser (`src/io/kicad.ts`, lazy chunk
+  `kicad-*.js` ~20.5 kB) and built-in board preset scenario geometries (`src/boards/presets.ts`, lazy chunk
+  `presets-*.js` ~22.1 kB) into dynamic imports loaded strictly on demand via `src/boards/presetsMeta.ts`.
+  Main bench bundle `app-*.js` dropped from 481.95 kB to 465.46 kB, reducing initial boot JavaScript by ~42.6 kB.
+- **TypeScript hardening**: enabled `noImplicitOverride: true` in `tsconfig.json` and added explicit
+  `override` keywords across derived SPICE device classes (`Resistor`, `Capacitor`, `Inductor`, `Diode`,
+  `VSource`, `ISource`, `VCVS`, `VCCS`, `Mosfet`, `Bjt`, `Switch`, `BSource`) in `src/spice/devices.ts`.
+  Included `scripts/` in `tsconfig.json` so all build, automation, and smoke scripts are statically verified
+  during `npm run typecheck`.
 - **Gerber export**: replaced the ~174-line inline Gerber generator in `src/ui/app.ts` with
   a dynamically loaded (`src/io/gerber.ts`, lazy chunk ~8.56 kB) industrial RS-274X exporter
   with Excellon drill generation (`.drl`), solder masks, silkscreens, edge cuts, and human-readable
@@ -38,6 +51,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Biome & lint cleanup**: typed Playwright browser window globals (`window.deadboard`,
+  `window.__dir`, `window.__pr`) in `scripts/videos/director.ts` and promo scripts, eliminating
+  unsafe `(window as any)` casts, and resolved `noAssignInExpressions` assignments in `src/io/schematic.ts`.
 - **Numerical precision & modern JS**: replaced loose global `isFinite` and `isNaN` with strict
   `Number.isFinite` and `Number.isNaN` throughout the SPICE solver (`devices.ts`, `engine.ts`,
   `netlist.ts`, `units.ts`, `board.ts`), board creator, and formatting utilities.
