@@ -176,6 +176,12 @@ export class PcbApp {
   private dmmRel = false;
   private dmmRelOffset: number | null = null;
   private currentDmmNumericVal: number | null = null;
+  private dmmMinMaxMode: 'LIVE' | 'MIN' | 'MAX' | 'AVG' = 'LIVE';
+  private dmmMin: number | null = null;
+  private dmmMax: number | null = null;
+  private dmmAvg: number | null = null;
+  private dmmCount = 0;
+  private dmmSum = 0;
   private diodeLitIds: string[] = [];
   private hintsShown = 0;
 
@@ -2198,6 +2204,10 @@ export class PcbApp {
       this.toggleDmmRel(this.currentDmmNumericVal);
       return;
     }
+    if (k === 'm') {
+      this.cycleDmmMinMax();
+      return;
+    }
     if (k === 's') {
       if (this.scopeProbe) {
         this.scopePaused = !this.scopePaused;
@@ -2797,8 +2807,42 @@ export class PcbApp {
 
     this.currentDmmNumericVal = numVal;
 
-    if (this.dmmRel && this.dmmRelOffset !== null && numVal !== null) {
-      const delta = numVal - this.dmmRelOffset;
+    const probesPlaced = this.probeRed !== null || this.probeBlack !== null;
+    if (probesPlaced && numVal !== null && Number.isFinite(numVal)) {
+      if (this.dmmMin === null || numVal < this.dmmMin) this.dmmMin = numVal;
+      if (this.dmmMax === null || numVal > this.dmmMax) this.dmmMax = numVal;
+      this.dmmCount++;
+      this.dmmSum += numVal;
+      this.dmmAvg = this.dmmSum / this.dmmCount;
+    } else if (!probesPlaced) {
+      this.resetDmmMinMax();
+    }
+
+    let dispVal = numVal;
+    if (this.dmmMinMaxMode === 'MIN') dispVal = this.dmmMin;
+    else if (this.dmmMinMaxMode === 'MAX') dispVal = this.dmmMax;
+    else if (this.dmmMinMaxMode === 'AVG') dispVal = this.dmmAvg;
+
+    if (this.dmmMinMaxMode !== 'LIVE') {
+      if (dispVal !== null && Number.isFinite(dispVal)) {
+        if (this.dmmMode === 'V' || this.dmmMode === 'DIODE') {
+          reading = `${dispVal >= 0 ? '+' : ''}${dispVal.toFixed(3)} V`;
+        } else if (this.dmmMode === 'OHM') {
+          reading = dispVal < 0.05 ? '0.0 Ω' : fmtOhm(dispVal);
+        } else if (this.dmmMode === 'CAP') {
+          reading = fmtSI(dispVal, 'F');
+        } else if (this.dmmMode === 'AMP') {
+          reading = `${(dispVal * 1000).toFixed(1)} mA`;
+        }
+        sub = `${this.dmmMinMaxMode} (${this.dmmCount} samples) · ${sub}`;
+      } else {
+        reading = '— . —';
+        sub = `${this.dmmMinMaxMode} (no samples recorded)`;
+      }
+    }
+
+    if (this.dmmRel && this.dmmRelOffset !== null && dispVal !== null && Number.isFinite(dispVal)) {
+      const delta = dispVal - this.dmmRelOffset;
       if (this.dmmMode === 'V' || this.dmmMode === 'DIODE') {
         reading = `${delta >= 0 ? '+' : ''}${delta.toFixed(3)} V`;
       } else if (this.dmmMode === 'OHM') {
@@ -2836,15 +2880,19 @@ export class PcbApp {
             <div class="seg">
               <button class="${this.dmmHold ? 'on' : ''}" id="dmm-hold" title="Hold reading (D)">HOLD</button>
               <button class="${this.dmmRel ? 'on' : ''}" id="dmm-rel" title="Relative zero offset (U)">REL Δ</button>
+              <button class="${this.dmmMinMaxMode !== 'LIVE' ? 'on' : ''}" id="dmm-minmax" title="Cycle Min/Max/Avg (M)">${this.dmmMinMaxMode === 'LIVE' ? 'MIN/MAX' : this.dmmMinMaxMode}</button>
             </div>
             <button class="btn ghost icon" id="dmm-clr" title="Clear probes">${icon('x', 14)}</button>
           </div>
         </div>
         <div class="dmm-lcd">
-          ${(this.dmmHold || this.dmmRel) ? `
+          ${(this.dmmHold || this.dmmRel || this.dmmMinMaxMode !== 'LIVE') ? `
           <div class="dmm-annunciators">
             ${this.dmmHold ? '<span class="dmm-badge hold">HOLD</span>' : ''}
             ${this.dmmRel ? '<span class="dmm-badge rel">Δ REL</span>' : ''}
+            ${this.dmmMinMaxMode === 'MIN' ? '<span class="dmm-badge min">MIN</span>' : ''}
+            ${this.dmmMinMaxMode === 'MAX' ? '<span class="dmm-badge max">MAX</span>' : ''}
+            ${this.dmmMinMaxMode === 'AVG' ? '<span class="dmm-badge avg">AVG</span>' : ''}
           </div>` : ''}
           <div class="dmm-val">${this.esc(reading)}</div>
           <div class="dmm-sub">${this.esc(sub)}</div>
@@ -2867,6 +2915,7 @@ export class PcbApp {
       this.dmmHoldVal = null;
       this.dmmRel = false;
       this.dmmRelOffset = null;
+      this.resetDmmMinMax();
       this.renderDmm();
       this.renderTutorial();
     });
@@ -2876,6 +2925,7 @@ export class PcbApp {
       this.dmmHoldVal = null;
       this.dmmRel = false;
       this.dmmRelOffset = null;
+      this.resetDmmMinMax();
       this.checkContinuityBeep();
       this.renderDmm();
       this.renderTutorial();
@@ -2886,6 +2936,7 @@ export class PcbApp {
       this.dmmHoldVal = null;
       this.dmmRel = false;
       this.dmmRelOffset = null;
+      this.resetDmmMinMax();
       this.renderDmm();
       this.renderTutorial();
     });
@@ -2896,12 +2947,14 @@ export class PcbApp {
         this.dmmHoldVal = null;
         this.dmmRel = false;
         this.dmmRelOffset = null;
+        this.resetDmmMinMax();
         this.renderDmm();
         this.renderTutorial();
       });
     }
     this.dmmBoxEl.querySelector('#dmm-hold')?.addEventListener('click', () => this.toggleDmmHold());
     this.dmmBoxEl.querySelector('#dmm-rel')?.addEventListener('click', () => this.toggleDmmRel(numVal));
+    this.dmmBoxEl.querySelector('#dmm-minmax')?.addEventListener('click', () => this.cycleDmmMinMax());
     if (this.mobile) this.dmmBoxEl.querySelector('.dmm-lcd')?.addEventListener('click', () => { this.dmmSubFull = !this.dmmSubFull; this.renderDmm(); });
     for (const [id, which] of [['#probe-red', 'red'], ['#probe-blk', 'black']] as const) {
       this.dmmBoxEl.querySelector(id)?.addEventListener('click', () => {
@@ -2917,9 +2970,31 @@ export class PcbApp {
       this.activeProbeAuto = false;
       this.dmmHold = false;
       this.dmmHoldVal = null;
+      this.resetDmmMinMax();
       this.renderDmm();
       this.renderTutorial();
     });
+  }
+
+  private cycleDmmMinMax() {
+    const modes: ('LIVE' | 'MIN' | 'MAX' | 'AVG')[] = ['LIVE', 'MIN', 'MAX', 'AVG'];
+    const idx = modes.indexOf(this.dmmMinMaxMode);
+    this.dmmMinMaxMode = modes[(idx + 1) % modes.length];
+    sfxClick();
+    const modeName = this.dmmMinMaxMode;
+    const msg = modeName === 'LIVE'
+      ? 'DMM Live tracking'
+      : `DMM ${modeName} display (${this.dmmCount} samples)`;
+    this.toast(msg, 'info');
+    this.renderDmm();
+  }
+
+  private resetDmmMinMax() {
+    this.dmmMin = null;
+    this.dmmMax = null;
+    this.dmmAvg = null;
+    this.dmmCount = 0;
+    this.dmmSum = 0;
   }
 
   private toggleDmmHold() {

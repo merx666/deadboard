@@ -47,9 +47,51 @@ assert(dmm.rel && dmm.relOffset === 0.25, 'Rel must be enabled with given offset
 dmm.toggleRel();
 assert(!dmm.rel && dmm.relOffset === null, 'Rel must clear on second toggle');
 
+// Min/Max/Avg tracking & cycling
+assert(dmm.minMaxMode === 'LIVE', 'Default Min/Max mode must be LIVE');
+assert(dmm.cycleMinMax() === 'MIN', 'First cycle must be MIN');
+assert(dmm.cycleMinMax() === 'MAX', 'Second cycle must be MAX');
+assert(dmm.cycleMinMax() === 'AVG', 'Third cycle must be AVG');
+assert(dmm.cycleMinMax() === 'LIVE', 'Fourth cycle must wrap to LIVE');
+assert(dmm.cycleMode() === 'MIN', 'cycleMode alias should cycle to MIN');
+assert(dmm.cycleMinMaxMode() === 'MAX', 'cycleMinMaxMode alias should cycle to MAX');
+dmm.setMinMaxMode('LIVE');
+assert(dmm.minMaxMode === 'LIVE', 'setMinMaxMode should set LIVE');
+
+// Tracking with probes placed vs lifted
+dmm.liftProbes();
+dmm.recordValue(4.5);
+assert(dmm.min === null && (dmm.count as number) === 0, 'Values should not track without probes placed');
+
+dmm.placeProbe('red', [14.25, 33.0], 'F');
+dmm.recordValue(3.3);
+assert(dmm.min === 3.3 && (dmm.max as number | null) === 3.3 && dmm.avg === 3.3 && (dmm.count as number) === 1, 'Single sample min/max/avg must equal sample');
+
+dmm.recordValue(5.0);
+assert(dmm.min === 3.3 && (dmm.max as number | null) === 5.0 && Math.abs((dmm.avg ?? 0) - 4.15) < 1e-4 && (dmm.count as number) === 2, 'Two samples min/max/avg correct');
+
+dmm.recordValue(1.2);
+assert(dmm.min === 1.2 && (dmm.max as number | null) === 5.0 && Math.abs((dmm.avg ?? 0) - 3.16666) < 1e-3 && (dmm.count as number) === 3, 'Three samples min/max/avg correct');
+
+assert(dmm.getDisplayedValue(2.0) === 2.0, 'In LIVE mode getDisplayedValue returns live value');
+dmm.setMinMaxMode('MIN');
+assert(dmm.getDisplayedValue(2.0) === 1.2, 'In MIN mode getDisplayedValue returns min');
+dmm.setMinMaxMode('MAX');
+assert(dmm.getDisplayedValue(2.0) === 5.0, 'In MAX mode getDisplayedValue returns max');
+dmm.setMinMaxMode('AVG');
+assert(Math.abs((dmm.getDisplayedValue(2.0) ?? 0) - 3.16666) < 1e-3, 'In AVG mode getDisplayedValue returns avg');
+
+dmm.liftProbes();
+assert(dmm.min === null && dmm.max === null && dmm.avg === null && dmm.count === 0, 'Lifting probes must reset min/max/avg tracking');
+
+dmm.placeProbe('red', [14.25, 33.0], 'F');
+dmm.recordValue(2.5);
+dmm.setMinMaxMode('MAX');
 dmm.deactivate();
 assert(dmm.probeRed === null && dmm.probeBlack === null, 'Deactivation must lift probes');
 assert(!dmm.hold && !dmm.rel, 'Deactivation must reset hold and rel');
+assert(dmm.minMaxMode === 'LIVE', 'Deactivation must reset minMaxMode to LIVE');
+assert(dmm.min === null && dmm.max === null && dmm.avg === null, 'Deactivation must reset min/max/avg');
 
 // Scope testing
 const scope = new OscilloscopeTool();
